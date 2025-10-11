@@ -17,6 +17,8 @@ Interface gráfica completa com:
 - Adicionar/remover regras facilmente
 - Ativar/desativar regras individualmente
 - Visualização de todas as regras configuradas
+- **Histórico de requisições com filtros avançados**
+- **Visualização detalhada de Request/Response**
 
 ### 2. Modo Headless (Para servidores/automação)
 
@@ -170,6 +172,108 @@ Executa o proxy sem interface gráfica, ideal para:
 
 **Via JSON:**
 - Delete o objeto da regra do array
+
+## Histórico de Requisições
+
+### Visão Geral
+
+A aba "Histórico de Requisições" permite visualizar e analisar todas as requisições HTTP capturadas pelo proxy.
+
+### Recursos do Histórico
+
+**Captura Automática:**
+- Todas as requisições que passam pelo proxy são automaticamente capturadas
+- Armazena até 1000 requisições (as mais antigas são removidas)
+- Atualização em tempo real (a cada segundo)
+
+**Informações Capturadas:**
+- Host/Domínio
+- Data e hora
+- Método HTTP (GET, POST, etc.)
+- Status da resposta
+- URL completa
+- Headers da requisição e resposta
+- Body da requisição e resposta
+
+### Filtros
+
+**Filtro por Método HTTP:**
+```
+Método: [Dropdown com opções]
+- Todos (padrão)
+- GET
+- POST
+- PUT
+- DELETE
+- PATCH
+- HEAD
+- OPTIONS
+```
+
+**Filtro por Domínio (Regex):**
+```
+Domínio (regex): [Campo de texto]
+Exemplos:
+- google.com              → Filtra apenas Google
+- google|facebook         → Filtra Google OU Facebook
+- api\..*\.com            → Filtra subdomínios que começam com "api."
+- exemplo\.com|test\.com  → Múltiplos domínios exatos
+```
+
+### Visualização de Detalhes
+
+**Ao clicar em uma requisição:**
+1. A seção de detalhes é preenchida automaticamente
+2. Duas abas disponíveis:
+
+**Aba "Request":**
+- URL completa
+- Método HTTP
+- Host e path
+- Todos os headers
+- Body da requisição
+
+**Aba "Response":**
+- Status HTTP
+- Todos os headers
+- Body da resposta
+
+### Exemplos de Uso do Histórico
+
+**Exemplo 1: Debug de API**
+```
+1. Filtro Método: POST
+2. Filtro Domínio: api\.exemplo\.com
+3. Clique na requisição
+4. Veja o body enviado na aba "Request"
+5. Veja a resposta na aba "Response"
+```
+
+**Exemplo 2: Monitorar Múltiplos Sites**
+```
+1. Filtro Domínio: google\.com|facebook\.com|twitter\.com
+2. Veja todas as requisições para esses sites
+3. Analise headers e responses
+```
+
+**Exemplo 3: Verificar Modificações**
+```
+1. Configure uma regra de interceptação
+2. Faça uma requisição
+3. No histórico, veja a requisição capturada
+4. Verifique se o parâmetro foi modificado como esperado
+```
+
+### Limpeza do Histórico
+
+Para limpar todas as requisições capturadas:
+1. Clique em "Limpar Histórico"
+2. Confirme a ação
+3. Todo o histórico será removido
+
+**Nota:** O histórico não persiste entre sessões. Ao fechar o aplicativo, o histórico é perdido.
+
+Para mais detalhes, veja [HISTORY_GUIDE.md](HISTORY_GUIDE.md)
 
 ## HTTPS e Certificados
 

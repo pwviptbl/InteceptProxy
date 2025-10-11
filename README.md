@@ -14,6 +14,9 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
 - ✅ Ativar/desativar regras individualmente
 - ✅ Persistência de configurações em JSON
 - ✅ Servidor proxy HTTP na porta 8080
+- ✅ **NOVO:** Histórico de requisições com filtros avançados
+- ✅ **NOVO:** Visualização detalhada de Request/Response
+- ✅ **NOVO:** Filtros por método HTTP e regex de domínio
 
 ## Instalação
 
@@ -46,7 +49,7 @@ python intercept_proxy.py
 
 ### 2. Configurar Regras de Interceptação
 
-Na interface gráfica:
+Na interface gráfica, vá para a aba **"Regras de Interceptação"**:
 
 1. **Host/Domínio**: Digite o domínio a ser interceptado (ex: `exemplo.com`)
 2. **Caminho**: Digite o caminho da rota (ex: `/contato`)
@@ -54,11 +57,25 @@ Na interface gráfica:
 4. **Novo Valor**: Digite o valor que substituirá o original (ex: `teste1`)
 5. Clique em **"Adicionar Regra"**
 
-### 3. Iniciar o Proxy
+### 3. Visualizar Histórico de Requisições
+
+Na aba **"Histórico de Requisições"**:
+
+1. **Filtros**: Use os filtros para encontrar requisições específicas
+   - Filtrar por método (GET, POST, etc.)
+   - Filtrar por domínio usando regex (ex: `google.com|facebook.com`)
+2. **Lista**: Veja todas as requisições capturadas com host, data, hora, método e status
+3. **Detalhes**: Clique em uma requisição para ver detalhes completos
+   - Aba "Request": Headers e body da requisição
+   - Aba "Response": Status, headers e body da resposta
+
+Para mais informações sobre o histórico, veja [HISTORY_GUIDE.md](HISTORY_GUIDE.md)
+
+### 4. Iniciar o Proxy
 
 Clique no botão **"Iniciar Proxy"**. O servidor será iniciado na porta 8080.
 
-### 4. Configurar o Navegador
+### 5. Configurar o Navegador
 
 Configure seu navegador para usar o proxy:
 
@@ -74,7 +91,7 @@ Configure seu navegador para usar o proxy:
 #### Exemplo no Chrome:
 Use as configurações de sistema ou extensões como "Proxy SwitchyOmega"
 
-### 5. Navegação
+### 6. Navegação
 
 Navegue normalmente. Quando acessar uma URL que corresponda às regras configuradas, os parâmetros serão automaticamente substituídos.
 
