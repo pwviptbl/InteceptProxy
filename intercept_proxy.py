@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import re
+from datetime import datetime
 from mitmproxy import http
 from mitmproxy.tools.main import mitmdump
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -81,11 +82,53 @@ class InterceptConfig:
         return False
 
 
+class RequestHistory:
+    """Gerencia o histórico de requisições"""
+    
+    def __init__(self):
+        self.history = []
+        self.max_items = 1000  # Limita o histórico a 1000 itens
+    
+    def add_request(self, flow: http.HTTPFlow):
+        """Adiciona uma requisição ao histórico"""
+        request = flow.request
+        response = flow.response
+        
+        # Extrai informações da requisição
+        entry = {
+            'timestamp': datetime.now(),
+            'host': request.pretty_host,
+            'method': request.method,
+            'url': request.pretty_url,
+            'path': request.path,
+            'status': response.status_code if response else 0,
+            'request_headers': dict(request.headers),
+            'request_body': request.content.decode('utf-8', errors='ignore') if request.content else '',
+            'response_headers': dict(response.headers) if response else {},
+            'response_body': response.content.decode('utf-8', errors='ignore') if response and response.content else '',
+        }
+        
+        self.history.append(entry)
+        
+        # Limita o tamanho do histórico
+        if len(self.history) > self.max_items:
+            self.history.pop(0)
+    
+    def get_history(self):
+        """Retorna todo o histórico"""
+        return self.history
+    
+    def clear_history(self):
+        """Limpa o histórico"""
+        self.history = []
+
+
 class InterceptAddon:
     """Addon do mitmproxy para interceptar e modificar requisições"""
     
-    def __init__(self, config):
+    def __init__(self, config, history=None):
         self.config = config
+        self.history = history
     
     def request(self, flow: http.HTTPFlow) -> None:
         """Intercepta requisições HTTP"""
@@ -126,6 +169,11 @@ class InterceptAddon:
                             new_body = urlencode(params, doseq=True)
                             request.content = new_body.encode('utf-8')
                             print(f"[POST] Modificado: {rule['param_name']}={rule['param_value']} em {request.pretty_url}")
+    
+    def response(self, flow: http.HTTPFlow) -> None:
+        """Intercepta respostas HTTP e armazena no histórico"""
+        if self.history is not None:
+            self.history.add_request(flow)
 
 
 class ProxyGUI:
@@ -136,16 +184,20 @@ class ProxyGUI:
             raise ImportError("Tkinter não está disponível. A interface gráfica não pode ser criada.")
         
         self.config = InterceptConfig()
+        self.history = RequestHistory()
         self.proxy_thread = None
         self.proxy_running = False
         
         # Janela principal
         self.root = tk.Tk()
         self.root.title("InteceptProxy - Configurador")
-        self.root.geometry("800x600")
+        self.root.geometry("1000x700")
         
         self.setup_ui()
         self.refresh_rules_list()
+        
+        # Atualiza o histórico periodicamente
+        self.update_history_list()
     
     def setup_ui(self):
         """Configura a interface gráfica"""
@@ -164,8 +216,23 @@ class ProxyGUI:
         
         ttk.Label(control_frame, text="Porta: 8080").pack(side="left", padx=5)
         
+        # Notebook (Tabs)
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Tab 1: Configuração de Regras
+        self.setup_rules_tab()
+        
+        # Tab 2: Histórico de Requisições
+        self.setup_history_tab()
+    
+    def setup_rules_tab(self):
+        """Configura a aba de regras"""
+        rules_tab = ttk.Frame(self.notebook)
+        self.notebook.add(rules_tab, text="Regras de Interceptação")
+        
         # Frame de configuração de regras
-        config_frame = ttk.LabelFrame(self.root, text="Adicionar Regra de Interceptação", padding=10)
+        config_frame = ttk.LabelFrame(rules_tab, text="Adicionar Regra de Interceptação", padding=10)
         config_frame.pack(fill="x", padx=10, pady=5)
         
         # Host
@@ -196,7 +263,7 @@ class ProxyGUI:
         ttk.Button(config_frame, text="Adicionar Regra", command=self.add_rule).grid(row=2, column=0, columnspan=4, pady=10)
         
         # Frame de lista de regras
-        list_frame = ttk.LabelFrame(self.root, text="Regras Configuradas", padding=10)
+        list_frame = ttk.LabelFrame(rules_tab, text="Regras Configuradas", padding=10)
         list_frame.pack(fill="both", expand=True, padx=10, pady=5)
         
         # Treeview para mostrar regras
@@ -218,14 +285,14 @@ class ProxyGUI:
         self.rules_tree.configure(yscrollcommand=scrollbar.set)
         
         # Frame de botões para regras
-        buttons_frame = ttk.Frame(self.root)
+        buttons_frame = ttk.Frame(rules_tab)
         buttons_frame.pack(fill="x", padx=10, pady=5)
         
         ttk.Button(buttons_frame, text="Remover Regra Selecionada", command=self.remove_rule).pack(side="left", padx=5)
         ttk.Button(buttons_frame, text="Ativar/Desativar Regra", command=self.toggle_rule).pack(side="left", padx=5)
         
         # Frame de instruções
-        info_frame = ttk.LabelFrame(self.root, text="Instruções", padding=10)
+        info_frame = ttk.LabelFrame(rules_tab, text="Instruções", padding=10)
         info_frame.pack(fill="x", padx=10, pady=5)
         
         info_text = """1. Configure o navegador para usar o proxy: localhost:8080
@@ -234,6 +301,94 @@ class ProxyGUI:
 4. Navegue normalmente - os parâmetros configurados serão substituídos automaticamente"""
         
         ttk.Label(info_frame, text=info_text, justify="left").pack()
+    
+    def setup_history_tab(self):
+        """Configura a aba de histórico"""
+        history_tab = ttk.Frame(self.notebook)
+        self.notebook.add(history_tab, text="Histórico de Requisições")
+        
+        # Frame de filtros
+        filter_frame = ttk.LabelFrame(history_tab, text="Filtros", padding=10)
+        filter_frame.pack(fill="x", padx=10, pady=5)
+        
+        # Filtro por método
+        ttk.Label(filter_frame, text="Método:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.method_filter = ttk.Combobox(filter_frame, width=15, state="readonly")
+        self.method_filter['values'] = ("Todos", "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS")
+        self.method_filter.current(0)
+        self.method_filter.grid(row=0, column=1, padx=5, pady=2)
+        self.method_filter.bind('<<ComboboxSelected>>', lambda e: self.apply_history_filter())
+        
+        # Filtro por domínio (regex)
+        ttk.Label(filter_frame, text="Domínio (regex):").grid(row=0, column=2, sticky="w", padx=5, pady=2)
+        self.domain_filter_entry = ttk.Entry(filter_frame, width=40)
+        self.domain_filter_entry.grid(row=0, column=3, padx=5, pady=2)
+        self.domain_filter_entry.insert(0, "")
+        self.domain_filter_entry.bind('<KeyRelease>', lambda e: self.apply_history_filter())
+        
+        ttk.Label(filter_frame, text="(Use '|' para múltiplos: google.com|facebook.com)").grid(row=1, column=3, sticky="w", padx=5)
+        
+        # Botões
+        ttk.Button(filter_frame, text="Aplicar Filtros", command=self.apply_history_filter).grid(row=0, column=4, padx=5, pady=2)
+        ttk.Button(filter_frame, text="Limpar Histórico", command=self.clear_history).grid(row=0, column=5, padx=5, pady=2)
+        
+        # PanedWindow para dividir lista e detalhes
+        paned = ttk.PanedWindow(history_tab, orient=tk.VERTICAL)
+        paned.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Frame superior: Lista de requisições
+        list_frame = ttk.LabelFrame(paned, text="Requisições Capturadas", padding=5)
+        paned.add(list_frame, weight=1)
+        
+        # Treeview para histórico
+        columns = ('Host', 'Data', 'Hora', 'Método', 'Status', 'URL')
+        self.history_tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=10)
+        
+        self.history_tree.heading('Host', text='Host')
+        self.history_tree.heading('Data', text='Data')
+        self.history_tree.heading('Hora', text='Hora')
+        self.history_tree.heading('Método', text='Método')
+        self.history_tree.heading('Status', text='Status')
+        self.history_tree.heading('URL', text='URL')
+        
+        self.history_tree.column('Host', width=150)
+        self.history_tree.column('Data', width=80)
+        self.history_tree.column('Hora', width=80)
+        self.history_tree.column('Método', width=70)
+        self.history_tree.column('Status', width=60)
+        self.history_tree.column('URL', width=400)
+        
+        self.history_tree.pack(side="left", fill="both", expand=True)
+        
+        # Scrollbar para histórico
+        history_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.history_tree.yview)
+        history_scrollbar.pack(side="right", fill="y")
+        self.history_tree.configure(yscrollcommand=history_scrollbar.set)
+        
+        # Bind do clique para mostrar detalhes
+        self.history_tree.bind('<<TreeviewSelect>>', self.show_request_details)
+        
+        # Frame inferior: Detalhes da requisição
+        details_frame = ttk.LabelFrame(paned, text="Detalhes da Requisição", padding=5)
+        paned.add(details_frame, weight=1)
+        
+        # Notebook para abas de Request e Response
+        self.details_notebook = ttk.Notebook(details_frame)
+        self.details_notebook.pack(fill="both", expand=True)
+        
+        # Aba de Request
+        request_tab = ttk.Frame(self.details_notebook)
+        self.details_notebook.add(request_tab, text="Request")
+        
+        self.request_text = scrolledtext.ScrolledText(request_tab, wrap=tk.WORD, height=10)
+        self.request_text.pack(fill="both", expand=True)
+        
+        # Aba de Response
+        response_tab = ttk.Frame(self.details_notebook)
+        self.details_notebook.add(response_tab, text="Response")
+        
+        self.response_text = scrolledtext.ScrolledText(response_tab, wrap=tk.WORD, height=10)
+        self.response_text.pack(fill="both", expand=True)
     
     def add_rule(self):
         """Adiciona uma nova regra"""
@@ -302,7 +457,7 @@ class ProxyGUI:
         
         def run_proxy():
             try:
-                addon = InterceptAddon(self.config)
+                addon = InterceptAddon(self.config, self.history)
                 mitmdump(['-s', __file__, '--listen-port', '8080', '--set', 'confdir=~/.mitmproxy'])
             except Exception as e:
                 print(f"Erro no proxy: {e}")
@@ -330,6 +485,105 @@ class ProxyGUI:
         
         messagebox.showinfo("Aviso", 
                            "Para parar completamente o proxy, feche e reabra o aplicativo.")
+    
+    def update_history_list(self):
+        """Atualiza a lista de histórico periodicamente"""
+        self.apply_history_filter()
+        # Atualiza a cada 1 segundo
+        self.root.after(1000, self.update_history_list)
+    
+    def apply_history_filter(self):
+        """Aplica filtros ao histórico"""
+        # Limpa a lista
+        for item in self.history_tree.get_children():
+            self.history_tree.delete(item)
+        
+        # Obtém valores dos filtros
+        method_filter = self.method_filter.get()
+        domain_pattern = self.domain_filter_entry.get().strip()
+        
+        # Compila o regex do domínio se fornecido
+        domain_regex = None
+        if domain_pattern:
+            try:
+                domain_regex = re.compile(domain_pattern, re.IGNORECASE)
+            except re.error:
+                # Regex inválido, ignora o filtro
+                domain_regex = None
+        
+        # Filtra e adiciona requisições
+        for entry in self.history.get_history():
+            # Aplica filtro de método
+            if method_filter != "Todos" and entry['method'] != method_filter:
+                continue
+            
+            # Aplica filtro de domínio
+            if domain_regex and not domain_regex.search(entry['host']):
+                continue
+            
+            # Formata data e hora
+            date_str = entry['timestamp'].strftime('%d/%m/%Y')
+            time_str = entry['timestamp'].strftime('%H:%M:%S')
+            
+            # Adiciona à lista
+            self.history_tree.insert('', 'end', 
+                                    values=(entry['host'], date_str, time_str, 
+                                           entry['method'], entry['status'], entry['url']),
+                                    tags=(entry,))
+    
+    def show_request_details(self, event):
+        """Mostra detalhes da requisição selecionada"""
+        selection = self.history_tree.selection()
+        if not selection:
+            return
+        
+        # Obtém o item selecionado
+        item = selection[0]
+        values = self.history_tree.item(item)['values']
+        
+        # Procura a entrada correspondente no histórico
+        selected_entry = None
+        for entry in self.history.get_history():
+            if (entry['host'] == values[0] and 
+                entry['timestamp'].strftime('%d/%m/%Y') == values[1] and
+                entry['timestamp'].strftime('%H:%M:%S') == values[2]):
+                selected_entry = entry
+                break
+        
+        if not selected_entry:
+            return
+        
+        # Limpa os textos
+        self.request_text.delete('1.0', tk.END)
+        self.response_text.delete('1.0', tk.END)
+        
+        # Formata e exibe a requisição
+        request_info = f"URL: {selected_entry['url']}\n"
+        request_info += f"Método: {selected_entry['method']}\n"
+        request_info += f"Host: {selected_entry['host']}\n"
+        request_info += f"Path: {selected_entry['path']}\n\n"
+        request_info += "Headers:\n"
+        for key, value in selected_entry['request_headers'].items():
+            request_info += f"  {key}: {value}\n"
+        request_info += f"\nBody:\n{selected_entry['request_body']}"
+        
+        self.request_text.insert('1.0', request_info)
+        
+        # Formata e exibe a resposta
+        response_info = f"Status: {selected_entry['status']}\n\n"
+        response_info += "Headers:\n"
+        for key, value in selected_entry['response_headers'].items():
+            response_info += f"  {key}: {value}\n"
+        response_info += f"\nBody:\n{selected_entry['response_body']}"
+        
+        self.response_text.insert('1.0', response_info)
+    
+    def clear_history(self):
+        """Limpa o histórico de requisições"""
+        if messagebox.askyesno("Confirmar", "Deseja realmente limpar todo o histórico?"):
+            self.history.clear_history()
+            self.apply_history_filter()
+            messagebox.showinfo("Sucesso", "Histórico limpo com sucesso!")
     
     def run(self):
         """Inicia a aplicação"""
