@@ -2,14 +2,16 @@
 """
 InteceptProxy - Intercepta requisições HTTP e modifica parâmetros configurados
 """
+import asyncio
 import json
 import os
 import threading
 import re
 from datetime import datetime
 from mitmproxy import http
-from mitmproxy.tools.main import mitmdump
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from mitmproxy import options
+from mitmproxy.tools.dump import DumpMaster
+from urllib.parse import parse_qs, urlencode, urlparse
 
 # Tkinter import é opcional (pode não estar disponível em ambientes headless)
 try:
@@ -129,6 +131,29 @@ class InterceptAddon:
     def __init__(self, config, history=None):
         self.config = config
         self.history = history
+
+    @staticmethod
+    def _split_host_and_path(raw_host: str):
+        """Normaliza host configurado, aceitando entradas com esquema ou URL completa."""
+        if not raw_host:
+            return "", ""
+        parsed = urlparse(raw_host) if "://" in raw_host else urlparse(f"//{raw_host}")
+        host = (parsed.hostname or parsed.netloc or "").lower()
+        extra_path = parsed.path if (parsed.scheme or parsed.netloc) else ""
+        if not host:
+            host = raw_host.lower()
+        return host, extra_path
+
+    @staticmethod
+    def _host_matches(request_host: str, rule_host: str) -> bool:
+        """Verifica se o host da requisição corresponde ao host da regra."""
+        if not rule_host:
+            return True
+        request_host = request_host.lower()
+        rule_host = rule_host.lower()
+        if request_host == rule_host:
+            return True
+        return request_host.endswith(f".{rule_host}")
     
     def request(self, flow: http.HTTPFlow) -> None:
         """Intercepta requisições HTTP"""
@@ -139,8 +164,12 @@ class InterceptAddon:
                 continue
             
             # Verifica se a URL corresponde ao host e caminho configurados
-            host_match = rule['host'] in request.pretty_host
-            path_match = request.path.startswith(rule['path'])
+            rule_host, host_path = self._split_host_and_path(rule.get('host', ''))
+            normalized_rule_path = rule.get('path', '') or host_path or ""
+            if normalized_rule_path and not normalized_rule_path.startswith('/'):
+                normalized_rule_path = f"/{normalized_rule_path}"
+            host_match = self._host_matches(request.pretty_host, rule_host)
+            path_match = True if not normalized_rule_path else request.path.startswith(normalized_rule_path)
             
             if host_match and path_match:
                 # Modifica parâmetros na query string (GET)
@@ -187,6 +216,8 @@ class ProxyGUI:
         self.history = RequestHistory()
         self.proxy_thread = None
         self.proxy_running = False
+        self.proxy_master = None
+        self.proxy_loop = None
         
         # Janela principal
         self.root = tk.Tk()
@@ -456,11 +487,37 @@ class ProxyGUI:
             return
         
         def run_proxy():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            async def runner():
+                try:
+                    proxy_options = options.Options(listen_host='127.0.0.1', listen_port=8080)
+                    master = DumpMaster(proxy_options, with_termlog=False, with_dumper=False)
+                    master.addons.add(InterceptAddon(self.config, self.history))
+                    self.proxy_master = master
+                    self.proxy_loop = loop
+                    await master.run()
+                except Exception as err:
+                    err_msg = str(err)
+                    print(f"Erro no proxy: {err_msg}")
+                    self.root.after(0, lambda message=err_msg: messagebox.showerror("Erro", f"Falha ao iniciar o proxy: {message}"))
+                finally:
+                    try:
+                        if self.proxy_master is not None:
+                            await self.proxy_master.shutdown()
+                    except Exception as shutdown_error:
+                        print(f"Erro ao finalizar proxy: {shutdown_error}")
+                    finally:
+                        self.proxy_master = None
+                        self.proxy_loop = None
+                        self.proxy_running = False
+                        self.root.after(0, self._set_proxy_stopped_state)
+
             try:
-                addon = InterceptAddon(self.config, self.history)
-                mitmdump(['-s', __file__, '--listen-port', '8080', '--set', 'confdir=~/.mitmproxy'])
-            except Exception as e:
-                print(f"Erro no proxy: {e}")
+                loop.run_until_complete(runner())
+            finally:
+                loop.close()
         
         self.proxy_thread = threading.Thread(target=run_proxy, daemon=True)
         self.proxy_thread.start()
@@ -474,17 +531,31 @@ class ProxyGUI:
                            "Proxy iniciado na porta 8080\n\n"
                            "Configure seu navegador para usar:\n"
                            "Host: localhost\n"
-                           "Porta: 8080")
+                           "Porta: 8080\n\n"
+                           "Para HTTPS, instale o certificado em http://mitm.it")
     
     def stop_proxy(self):
         """Para o servidor proxy"""
-        # Note: mitmproxy não tem um método simples de parar, então apenas atualizamos a interface
-        self.proxy_running = False
-        self.status_label.config(text="Status: Parado (reinicie o aplicativo)", foreground="orange")
-        self.stop_button.config(state="disabled")
+        if not self.proxy_running:
+            messagebox.showinfo("Proxy", "Proxy já está parado.")
+            return
         
-        messagebox.showinfo("Aviso", 
-                           "Para parar completamente o proxy, feche e reabra o aplicativo.")
+        if self.proxy_master is not None and self.proxy_loop is not None:
+            try:
+                asyncio.run_coroutine_threadsafe(self.proxy_master.shutdown(), self.proxy_loop)
+            except Exception as e:
+                print(f"Erro ao parar proxy: {e}")
+        else:
+            self.proxy_running = False
+            self._set_proxy_stopped_state()
+        
+        messagebox.showinfo("Proxy", "Proxy sendo finalizado.")
+
+    def _set_proxy_stopped_state(self):
+        """Atualiza UI quando o proxy para."""
+        self.status_label.config(text="Status: Parado", foreground="red")
+        self.start_button.config(state="normal")
+        self.stop_button.config(state="disabled")
     
     def update_history_list(self):
         """Atualiza a lista de histórico periodicamente"""

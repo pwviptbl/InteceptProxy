@@ -82,6 +82,8 @@ Configure seu navegador para usar o proxy:
 - **Host/IP**: `localhost` ou `127.0.0.1`
 - **Porta**: `8080`
 
+> 💡 Para interceptar tráfego HTTPS é obrigatório instalar o certificado raiz do mitmproxy. Com o proxy em execução, acesse `http://mitm.it`, baixe o certificado para o seu sistema/navegador e instale-o na lista de autoridades confiáveis. Reinicie o navegador depois dessa etapa.
+
 #### Exemplo no Firefox:
 1. Configurações → Geral → Configurações de Rede
 2. Configurar Proxy Manualmente
@@ -145,6 +147,7 @@ InteceptProxy/
 Se precisar interceptar HTTPS, instale o certificado do mitmproxy:
 1. Com o proxy rodando, acesse: http://mitm.it
 2. Siga as instruções para instalar o certificado no seu sistema
+3. Reinicie o navegador para que ele reconheça a nova autoridade
 
 ### Porta já em uso
 Se a porta 8080 já estiver em uso, você pode modificar a linha no código:
