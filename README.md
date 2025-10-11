@@ -17,6 +17,7 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
 - ✅ **NOVO:** Histórico de requisições com filtros avançados
 - ✅ **NOVO:** Visualização detalhada de Request/Response
 - ✅ **NOVO:** Filtros por método HTTP e regex de domínio
+- ✅ **NOVO:** Interface de Linha de Comando (CLI) para gerenciamento de regras e execução headless
 
 ## Instalação
 
@@ -97,6 +98,37 @@ Use as configurações de sistema ou extensões como "Proxy SwitchyOmega"
 
 Navegue normalmente. Quando acessar uma URL que corresponda às regras configuradas, os parâmetros serão automaticamente substituídos.
 
+### Uso via Linha de Comando (CLI)
+
+A aplicação também pode ser controlada via terminal usando `cli.py`.
+
+#### Listar Regras
+```bash
+python cli.py list
+```
+
+#### Adicionar uma Regra
+```bash
+python cli.py add --host exemplo.com --path /login --param user --value admin
+```
+
+#### Remover uma Regra
+Use o índice (o número # da lista) para remover.
+```bash
+python cli.py remove 1
+```
+
+#### Ativar/Desativar uma Regra
+Use o índice para ativar ou desativar.
+```bash
+python cli.py toggle 1
+```
+
+#### Iniciar o Proxy (Headless)
+```bash
+python cli.py run
+```
+
 ## Exemplo de Uso
 
 **Configuração:**
@@ -116,10 +148,13 @@ O parâmetro `Titulo` é substituído por `teste1`, mas o parâmetro `Nome` perm
 
 ```
 InteceptProxy/
-├── intercept_proxy.py       # Script principal com GUI e lógica do proxy
-├── requirements.txt          # Dependências Python
-├── intercept_config.json     # Arquivo de configuração (gerado automaticamente)
-└── README.md                 # Este arquivo
+├── src/
+│   ├── core/               # Lógica principal do proxy
+│   └── ui/                 # Interface gráfica
+├── cli.py                  # Ponto de entrada para a CLI
+├── intercept_proxy.py      # Ponto de entrada para a GUI
+├── requirements.txt        # Dependências
+└── README.md
 ```
 
 ## Gerenciamento de Regras
