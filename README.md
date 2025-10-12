@@ -39,6 +39,32 @@ cd InteceptProxy
 pip install -r requirements.txt
 ```
 
+### Ambiente Virtual
+
+Para isolar as dependências do projeto, é recomendado usar um ambiente virtual.
+
+1. Criar o ambiente virtual:
+```bash
+python -m venv .venv
+```
+
+2. Ativar o ambiente virtual:
+   - No Windows:
+```bash
+.venv\Scripts\activate
+```
+   - No Linux/Mac:
+```bash
+source .venv/bin/activate
+```
+
+3. Para desativar:
+```bash
+deactivate
+```
+
+> 💡 Lembre-se de ativar o ambiente virtual antes de instalar as dependências e executar o projeto.
+
 ## Uso
 
 ### 1. Iniciar a Aplicação
