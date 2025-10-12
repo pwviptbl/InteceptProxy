@@ -10,6 +10,7 @@ def send_single_request(url, param_name, value):
     Envia uma única requisição HTTP através do proxy, substituindo o valor
     do parâmetro especificado na URL.
     """
+    # Função para enviar uma única requisição com substituição de parâmetro.
     try:
         # Garante que o valor não tenha quebras de linha
         payload = value.strip()
@@ -71,3 +72,33 @@ def run_sender(url, file_path, param_name, num_threads):
                 success_count += 1
 
     log.info(f"Sender: Envio concluído. {success_count}/{total_requests} requisições enviadas com sucesso.")
+
+
+def send_request_no_params(url):
+    """
+    Envia uma única requisição HTTP através do proxy sem modificar parâmetros.
+    """
+    try:
+        full_url = url.strip()
+
+        proxies = {
+            "http": "http://127.0.0.1:8080",
+            "https": "http://127.0.0.1:8080",
+        }
+
+        response = requests.get(
+            full_url,
+            proxies=proxies,
+            verify=False
+        )
+
+        if response.status_code in [200, 201, 204]:
+            log.info(f"Sender: Requisição para '{full_url}' enviada com sucesso (Status: {response.status_code}).")
+            return True
+        else:
+            log.warning(f"Sender: Requisição para '{full_url}' retornou status inesperado: {response.status_code}.")
+            return False
+
+    except requests.RequestException as e:
+        log.error(f"Sender: Erro ao enviar requisição para '{full_url}': {e}")
+        return False
