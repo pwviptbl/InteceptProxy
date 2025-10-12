@@ -3,14 +3,27 @@ import requests
 import os
 from .logger_config import log
 
+import re
+
 def send_single_request(url, param_name, value):
-    """Envia uma única requisição HTTP através do proxy."""
+    """
+    Envia uma única requisição HTTP através do proxy, substituindo o valor
+    do parâmetro especificado na URL.
+    """
     try:
         # Garante que o valor não tenha quebras de linha
         payload = value.strip()
 
-        # Monta a URL com o parâmetro
-        full_url = f"{url}?{param_name}={payload}"
+        # Tenta substituir o valor do parâmetro na URL
+        # Esta regex busca por `param_name=valor` e substitui `valor`
+        pattern = re.compile(f"({param_name}=)([^&]*)")
+
+        if pattern.search(url):
+            full_url = pattern.sub(f"\\g<1>{payload}", url)
+        else:
+            # Se o parâmetro não existir, adiciona no final
+            separator = '&' if '?' in url else '?'
+            full_url = f"{url}{separator}{param_name}={payload}"
 
         proxies = {
             "http": "http://127.0.0.1:8080",

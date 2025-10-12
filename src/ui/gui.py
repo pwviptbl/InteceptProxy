@@ -66,6 +66,9 @@ class ProxyGUI:
         # Tab 2: Histórico de Requisições
         self.setup_history_tab()
 
+        # Tab 3: Repetição (Sender)
+        self.setup_sender_tab()
+
     def setup_rules_tab(self):
         """Configura a aba de regras"""
         rules_tab = ttk.Frame(self.notebook)
@@ -190,9 +193,6 @@ class ProxyGUI:
         ttk.Button(filter_frame, text="Aplicar Filtros", command=self.apply_history_filter).grid(row=0, column=4, padx=5, pady=2)
         ttk.Button(filter_frame, text="Limpar Histórico", command=self.clear_history).grid(row=0, column=5, padx=5, pady=2)
 
-        self.replay_button = ttk.Button(filter_frame, text="Reenviar Requisição (Replay)", command=self.replay_request, state="disabled")
-        self.replay_button.grid(row=0, column=6, padx=10, pady=2)
-        Tooltip(self.replay_button, "Reenvia a requisição selecionada através do proxy.")
 
         # PanedWindow para dividir lista e detalhes
         paned = ttk.PanedWindow(history_tab, orient=tk.VERTICAL)
@@ -227,8 +227,9 @@ class ProxyGUI:
         history_scrollbar.pack(side="right", fill="y")
         self.history_tree.configure(yscrollcommand=history_scrollbar.set)
 
-        # Bind do clique para mostrar detalhes
+        # Bind do clique para mostrar detalhes e menu de contexto
         self.history_tree.bind('<<TreeviewSelect>>', self.show_request_details)
+        self.history_tree.bind('<Button-3>', self.show_context_menu)
 
         # Frame inferior: Detalhes da requisição
         details_frame = ttk.LabelFrame(paned, text="Detalhes da Requisição", padding=5)
@@ -461,13 +462,10 @@ class ProxyGUI:
             self.history_map[item_id] = entry
 
     def show_request_details(self, event):
-        """Mostra detalhes da requisição selecionada e habilita/desabilita botões."""
+        """Mostra detalhes da requisição selecionada."""
         selection = self.history_tree.selection()
         if not selection:
-            self.replay_button.config(state="disabled")
             return
-
-        self.replay_button.config(state="normal")
 
         # Obtém o item selecionado
         item_id = selection[0]
@@ -508,52 +506,115 @@ class ProxyGUI:
             self.apply_history_filter()
             messagebox.showinfo("Sucesso", "Histórico limpo com sucesso!")
 
-    def replay_request(self):
-        """Reenvia a requisição selecionada."""
-        selection = self.history_tree.selection()
-        if not selection:
-            return
+    def setup_sender_tab(self):
+        """Configura a aba de Repetição (Sender)."""
+        sender_tab = ttk.Frame(self.notebook)
+        self.notebook.add(sender_tab, text="Repetição")
 
-        item_id = selection[0]
-        selected_entry = self.history_map.get(item_id)
+        sender_frame = ttk.LabelFrame(sender_tab, text="Configuração do Envio em Massa", padding=10)
+        sender_frame.pack(fill="x", padx=10, pady=10)
 
-        if not selected_entry:
-            messagebox.showerror("Erro", "Não foi possível encontrar os detalhes da requisição selecionada.")
-            return
+        # URL Alvo
+        ttk.Label(sender_frame, text="URL Alvo:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        self.sender_url_entry = ttk.Entry(sender_frame, width=80)
+        self.sender_url_entry.grid(row=0, column=1, columnspan=3, sticky="we", padx=5, pady=5)
+        Tooltip(self.sender_url_entry, "A URL que será usada como base. O valor do parâmetro será substituído aqui.")
 
-        # Executa o reenvio em uma thread para não bloquear a UI
-        thread = threading.Thread(target=self._execute_replay, args=(selected_entry,), daemon=True)
-        thread.start()
+        # Arquivo de Lista
+        ttk.Label(sender_frame, text="Arquivo de Valores (.txt):").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        self.sender_file_path = tk.StringVar()
+        file_entry = ttk.Entry(sender_frame, textvariable=self.sender_file_path, width=60, state="readonly")
+        file_entry.grid(row=1, column=1, columnspan=2, sticky="we", padx=5, pady=5)
 
-    def _execute_replay(self, entry):
-        """Executa a requisição de replay."""
+        file_button = ttk.Button(sender_frame, text="Selecionar Arquivo...", command=self.select_sender_file)
+        file_button.grid(row=1, column=3, sticky="w", padx=5, pady=5)
+        Tooltip(file_button, "Selecione um arquivo .txt com um valor por linha.")
+
+        # Nome do Parâmetro a ser Substituído
+        ttk.Label(sender_frame, text="Parâmetro a Substituir:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        self.sender_param_entry = ttk.Entry(sender_frame, width=30)
+        self.sender_param_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        Tooltip(self.sender_param_entry, "Nome do parâmetro na URL cujo valor será substituído por cada linha do arquivo.")
+
+        # Número de Threads
+        ttk.Label(sender_frame, text="Threads:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        self.sender_threads_spinbox = ttk.Spinbox(sender_frame, from_=1, to=100, width=10)
+        self.sender_threads_spinbox.set("10")
+        self.sender_threads_spinbox.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+        Tooltip(self.sender_threads_spinbox, "Número de requisições simultâneas.")
+
+        # Botão de Iniciar
+        start_sender_button = ttk.Button(sender_frame, text="Iniciar Envio", command=self.start_sender)
+        start_sender_button.grid(row=4, column=0, columnspan=4, pady=20)
+        Tooltip(start_sender_button, "Inicia o processo de envio em massa.")
+
+    def select_sender_file(self):
+        """Abre uma caixa de diálogo para selecionar o arquivo de valores."""
+        from tkinter import filedialog
+        filepath = filedialog.askopenfilename(
+            title="Selecione um arquivo de valores",
+            filetypes=(("Text files", "*.txt"), ("All files", "*.*"))
+        )
+        if filepath:
+            self.sender_file_path.set(filepath)
+
+    def start_sender(self):
+        """Inicia o processo de envio em massa a partir da aba Repetição."""
+        url = self.sender_url_entry.get().strip()
+        file_path = self.sender_file_path.get().strip()
+        param_name = self.sender_param_entry.get().strip()
+
         try:
-            method = entry['method']
-            url = entry['url']
-            headers = entry['request_headers']
-            body = entry['request_body']
+            threads = int(self.sender_threads_spinbox.get())
+        except ValueError:
+            messagebox.showerror("Erro", "O número de threads deve ser um inteiro válido.")
+            return
 
-            proxies = {
-                "http": "http://127.0.0.1:8080",
-                "https": "http://127.0.0.1:8080",
-            }
+        if not all([url, file_path, param_name]):
+            messagebox.showwarning("Aviso", "Todos os campos de configuração devem ser preenchidos.")
+            return
 
-            log.info(f"Reenviando requisição: {method} {url}")
+        # Executa o sender em uma thread para não bloquear a UI
+        from src.core.sender import run_sender
+        thread = threading.Thread(
+            target=run_sender,
+            args=(url, file_path, param_name, threads),
+            daemon=True
+        )
+        thread.start()
+        messagebox.showinfo("Iniciado", f"O envio em massa foi iniciado. Monitore o arquivo de log ou a aba de Histórico para ver o progresso.")
 
-            response = requests.request(
-                method,
-                url,
-                headers=headers,
-                data=body.encode('utf-8'),
-                proxies=proxies,
-                verify=False  # Ignora verificação de certificado SSL, pois estamos passando pelo mitmproxy
-            )
+    def show_context_menu(self, event):
+        """Exibe o menu de contexto no histórico de requisições."""
+        # Seleciona o item sob o cursor
+        item_id = self.history_tree.identify_row(event.y)
+        if not item_id:
+            return
 
-            log.info(f"Requisição reenviada com sucesso. Status: {response.status_code}")
+        # Garante que o item clicado esteja selecionado
+        self.history_tree.selection_set(item_id)
 
-        except Exception as e:
-            log.error(f"Erro ao reenviar requisição: {e}", exc_info=True)
-            self.root.after(0, lambda: messagebox.showerror("Erro de Replay", f"Falha ao reenviar a requisição:\n{e}"))
+        selected_entry = self.history_map.get(item_id)
+        if not selected_entry:
+            return
+
+        # Cria o menu
+        context_menu = tk.Menu(self.root, tearoff=0)
+        context_menu.add_command(
+            label="Enviar para Repetição",
+            command=lambda: self.send_to_repeater(selected_entry)
+        )
+
+        # Exibe o menu na posição do cursor
+        context_menu.tk_popup(event.x_root, event.y_root)
+
+    def send_to_repeater(self, entry):
+        """Envia a URL da entrada selecionada para a aba de Repetição."""
+        url = entry.get('url', '')
+        if url:
+            self.sender_url_entry.delete(0, tk.END)
+            self.sender_url_entry.insert(0, url)
+            self.notebook.select(2)  # Muda para a terceira aba (Repetição)
 
     def run(self):
         """Inicia a aplicação"""
