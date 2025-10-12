@@ -3,6 +3,7 @@ import re
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
+import requests
 
 from mitmproxy import options
 from mitmproxy.tools.dump import DumpMaster
@@ -25,6 +26,7 @@ class ProxyGUI:
         self.proxy_running = False
         self.proxy_master = None
         self.proxy_loop = None
+        self.history_map = {}
 
         # Janela principal com tema
         self.root = ThemedTk(theme="arc")
@@ -185,10 +187,12 @@ class ProxyGUI:
                                                                                                sticky="w", padx=5)
 
         # Botões
-        ttk.Button(filter_frame, text="Aplicar Filtros", command=self.apply_history_filter).grid(row=0, column=4,
-                                                                                                  padx=5, pady=2)
-        ttk.Button(filter_frame, text="Limpar Histórico", command=self.clear_history).grid(row=0, column=5, padx=5,
-                                                                                             pady=2)
+        ttk.Button(filter_frame, text="Aplicar Filtros", command=self.apply_history_filter).grid(row=0, column=4, padx=5, pady=2)
+        ttk.Button(filter_frame, text="Limpar Histórico", command=self.clear_history).grid(row=0, column=5, padx=5, pady=2)
+
+        self.replay_button = ttk.Button(filter_frame, text="Reenviar Requisição (Replay)", command=self.replay_request, state="disabled")
+        self.replay_button.grid(row=0, column=6, padx=10, pady=2)
+        Tooltip(self.replay_button, "Reenvia a requisição selecionada através do proxy.")
 
         # PanedWindow para dividir lista e detalhes
         paned = ttk.PanedWindow(history_tab, orient=tk.VERTICAL)
@@ -418,9 +422,10 @@ class ProxyGUI:
 
     def apply_history_filter(self):
         """Aplica filtros ao histórico"""
-        # Limpa a lista
+        # Limpa a lista e o mapa
         for item in self.history_tree.get_children():
             self.history_tree.delete(item)
+        self.history_map.clear()
 
         # Obtém valores dos filtros
         method_filter = self.method_filter.get()
@@ -449,30 +454,24 @@ class ProxyGUI:
             date_str = entry['timestamp'].strftime('%d/%m/%Y')
             time_str = entry['timestamp'].strftime('%H:%M:%S')
 
-            # Adiciona à lista
-            self.history_tree.insert('', 'end',
+            # Adiciona à lista e ao mapa
+            item_id = self.history_tree.insert('', 'end',
                                      values=(entry['host'], date_str, time_str,
-                                             entry['method'], entry['status'], entry['url']),
-                                     tags=(entry,))
+                                             entry['method'], entry['status'], entry['url']))
+            self.history_map[item_id] = entry
 
     def show_request_details(self, event):
-        """Mostra detalhes da requisição selecionada"""
+        """Mostra detalhes da requisição selecionada e habilita/desabilita botões."""
         selection = self.history_tree.selection()
         if not selection:
+            self.replay_button.config(state="disabled")
             return
 
-        # Obtém o item selecionado
-        item = selection[0]
-        values = self.history_tree.item(item)['values']
+        self.replay_button.config(state="normal")
 
-        # Procura a entrada correspondente no histórico
-        selected_entry = None
-        for entry in self.history.get_history():
-            if (entry['host'] == values[0] and
-                    entry['timestamp'].strftime('%d/%m/%Y') == values[1] and
-                    entry['timestamp'].strftime('%H:%M:%S') == values[2]):
-                selected_entry = entry
-                break
+        # Obtém o item selecionado
+        item_id = selection[0]
+        selected_entry = self.history_map.get(item_id)
 
         if not selected_entry:
             return
@@ -508,6 +507,53 @@ class ProxyGUI:
             self.history.clear_history()
             self.apply_history_filter()
             messagebox.showinfo("Sucesso", "Histórico limpo com sucesso!")
+
+    def replay_request(self):
+        """Reenvia a requisição selecionada."""
+        selection = self.history_tree.selection()
+        if not selection:
+            return
+
+        item_id = selection[0]
+        selected_entry = self.history_map.get(item_id)
+
+        if not selected_entry:
+            messagebox.showerror("Erro", "Não foi possível encontrar os detalhes da requisição selecionada.")
+            return
+
+        # Executa o reenvio em uma thread para não bloquear a UI
+        thread = threading.Thread(target=self._execute_replay, args=(selected_entry,), daemon=True)
+        thread.start()
+
+    def _execute_replay(self, entry):
+        """Executa a requisição de replay."""
+        try:
+            method = entry['method']
+            url = entry['url']
+            headers = entry['request_headers']
+            body = entry['request_body']
+
+            proxies = {
+                "http": "http://127.0.0.1:8080",
+                "https": "http://127.0.0.1:8080",
+            }
+
+            log.info(f"Reenviando requisição: {method} {url}")
+
+            response = requests.request(
+                method,
+                url,
+                headers=headers,
+                data=body.encode('utf-8'),
+                proxies=proxies,
+                verify=False  # Ignora verificação de certificado SSL, pois estamos passando pelo mitmproxy
+            )
+
+            log.info(f"Requisição reenviada com sucesso. Status: {response.status_code}")
+
+        except Exception as e:
+            log.error(f"Erro ao reenviar requisição: {e}", exc_info=True)
+            self.root.after(0, lambda: messagebox.showerror("Erro de Replay", f"Falha ao reenviar a requisição:\n{e}"))
 
     def run(self):
         """Inicia a aplicação"""

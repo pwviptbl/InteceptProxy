@@ -1,3 +1,4 @@
 mitmproxy==12.1.2
 click
 ttkthemes
+requests
