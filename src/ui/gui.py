@@ -530,22 +530,32 @@ class ProxyGUI:
         file_button.grid(row=1, column=3, sticky="w", padx=5, pady=5)
         Tooltip(file_button, "Selecione um arquivo .txt com um valor por linha.")
 
+        clear_button = ttk.Button(sender_frame, text="Limpar", command=lambda: self.sender_file_path.set(""))
+        clear_button.grid(row=1, column=4, sticky="w", padx=5, pady=5)
+        Tooltip(clear_button, "Limpa o caminho do arquivo selecionado.")
+
         # Nome do Parâmetro a ser Substituído
         ttk.Label(sender_frame, text="Parâmetro a Substituir:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
         self.sender_param_entry = ttk.Entry(sender_frame, width=30)
         self.sender_param_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
         Tooltip(self.sender_param_entry, "Nome do parâmetro na URL cujo valor será substituído por cada linha do arquivo.")
 
+        # Valor Manual
+        ttk.Label(sender_frame, text="Valor Manual:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        self.sender_manual_value_entry = ttk.Entry(sender_frame, width=30)
+        self.sender_manual_value_entry.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+        Tooltip(self.sender_manual_value_entry, "Um valor único para ser usado na substituição do parâmetro.")
+
         # Número de Threads
-        ttk.Label(sender_frame, text="Threads:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        ttk.Label(sender_frame, text="Threads:").grid(row=4, column=0, sticky="w", padx=5, pady=5)
         self.sender_threads_spinbox = ttk.Spinbox(sender_frame, from_=1, to=100, width=10)
         self.sender_threads_spinbox.set("10")
-        self.sender_threads_spinbox.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+        self.sender_threads_spinbox.grid(row=4, column=1, sticky="w", padx=5, pady=5)
         Tooltip(self.sender_threads_spinbox, "Número de requisições simultâneas.")
 
         # Botão de Iniciar
         start_sender_button = ttk.Button(sender_frame, text="Iniciar Envio", command=self.start_sender)
-        start_sender_button.grid(row=4, column=0, columnspan=4, pady=20)
+        start_sender_button.grid(row=5, column=0, columnspan=5, pady=20)
         Tooltip(start_sender_button, "Inicia o processo de envio em massa.")
 
     def select_sender_file(self):
@@ -559,30 +569,50 @@ class ProxyGUI:
             self.sender_file_path.set(filepath)
 
     def start_sender(self):
-        """Inicia o processo de envio em massa a partir da aba Repetição."""
+        """Inicia o processo de envio com base na prioridade: arquivo, valor manual ou nenhum."""
         url = self.sender_url_entry.get().strip()
         file_path = self.sender_file_path.get().strip()
+        manual_value = self.sender_manual_value_entry.get().strip()
         param_name = self.sender_param_entry.get().strip()
 
-        try:
-            threads = int(self.sender_threads_spinbox.get())
-        except ValueError:
-            messagebox.showerror("Erro", "O número de threads deve ser um inteiro válido.")
+        if not url:
+            messagebox.showwarning("Aviso", "A URL Alvo é obrigatória.")
             return
 
-        if not all([url, file_path, param_name]):
-            messagebox.showwarning("Aviso", "Todos os campos de configuração devem ser preenchidos.")
-            return
+        # Prioridade 1: Envio em massa com arquivo
+        if file_path:
+            if not param_name:
+                messagebox.showwarning("Aviso", "O 'Parâmetro a Substituir' é obrigatório ao usar um arquivo.")
+                return
+            try:
+                threads = int(self.sender_threads_spinbox.get())
+            except ValueError:
+                messagebox.showerror("Erro", "O número de threads deve ser um inteiro válido.")
+                return
 
-        # Executa o sender em uma thread para não bloquear a UI
-        from src.core.sender import run_sender
-        thread = threading.Thread(
-            target=run_sender,
-            args=(url, file_path, param_name, threads),
-            daemon=True
-        )
-        thread.start()
-        messagebox.showinfo("Iniciado", f"O envio em massa foi iniciado. Monitore o arquivo de log ou a aba de Histórico para ver o progresso.")
+            from src.core.sender import run_sender
+            thread = threading.Thread(target=run_sender, args=(url, file_path, param_name, threads), daemon=True)
+            thread.start()
+            messagebox.showinfo("Iniciado",
+                                f"Envio em massa a partir de '{file_path}' foi iniciado. Monitore os logs para ver o progresso.")
+
+        # Prioridade 2: Envio único com valor manual
+        elif manual_value:
+            if not param_name:
+                messagebox.showwarning("Aviso", "O 'Parâmetro a Substituir' é obrigatório ao usar um valor manual.")
+                return
+
+            from src.core.sender import send_single_request
+            thread = threading.Thread(target=send_single_request, args=(url, param_name, manual_value), daemon=True)
+            thread.start()
+            messagebox.showinfo("Iniciado", "Envio com valor manual foi iniciado. Monitore os logs.")
+
+        # Prioridade 3: Reenviar a requisição original
+        else:
+            from src.core.sender import send_request_no_params
+            thread = threading.Thread(target=send_request_no_params, args=(url,), daemon=True)
+            thread.start()
+            messagebox.showinfo("Iniciado", "A requisição original foi reenviada. Monitore os logs.")
 
     def show_context_menu(self, event):
         """Exibe o menu de contexto no histórico de requisições."""
