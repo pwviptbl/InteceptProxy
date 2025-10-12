@@ -6,10 +6,12 @@ from tkinter import ttk, messagebox, scrolledtext
 
 from mitmproxy import options
 from mitmproxy.tools.dump import DumpMaster
+from ttkthemes import ThemedTk
 
 from src.core.addon import InterceptAddon
 from src.core.config import InterceptConfig
 from src.core.history import RequestHistory
+from .tooltip import Tooltip
 
 
 class ProxyGUI:
@@ -23,8 +25,8 @@ class ProxyGUI:
         self.proxy_master = None
         self.proxy_loop = None
 
-        # Janela principal
-        self.root = tk.Tk()
+        # Janela principal com tema
+        self.root = ThemedTk(theme="arc")
         self.root.title("InteceptProxy - Configurador")
         self.root.geometry("1000x700")
 
@@ -95,8 +97,15 @@ class ProxyGUI:
         self.param_value_entry.insert(0, "teste1")
 
         # Botão adicionar
-        ttk.Button(config_frame, text="Adicionar Regra", command=self.add_rule).grid(row=2, column=0, columnspan=4,
-                                                                                    pady=10)
+        add_button = ttk.Button(config_frame, text="Adicionar Regra", command=self.add_rule)
+        add_button.grid(row=2, column=0, columnspan=4, pady=10)
+
+        # Adiciona tooltips
+        Tooltip(self.host_entry, "Domínio a ser interceptado (ex: exemplo.com)")
+        Tooltip(self.path_entry, "Caminho da URL a ser interceptado (ex: /login)")
+        Tooltip(self.param_name_entry, "Nome do parâmetro na URL a ser modificado.")
+        Tooltip(self.param_value_entry, "Novo valor que será atribuído ao parâmetro.")
+        Tooltip(add_button, "Clique para salvar esta regra na lista.")
 
         # Frame de lista de regras
         list_frame = ttk.LabelFrame(rules_tab, text="Regras Configuradas", padding=10)
@@ -124,9 +133,17 @@ class ProxyGUI:
         buttons_frame = ttk.Frame(rules_tab)
         buttons_frame.pack(fill="x", padx=10, pady=5)
 
-        ttk.Button(buttons_frame, text="Remover Regra Selecionada", command=self.remove_rule).pack(side="left",
-                                                                                                   padx=5)
-        ttk.Button(buttons_frame, text="Ativar/Desativar Regra", command=self.toggle_rule).pack(side="left", padx=5)
+        remove_button = ttk.Button(buttons_frame, text="Remover Regra Selecionada", command=self.remove_rule)
+        remove_button.pack(side="left", padx=5)
+        Tooltip(remove_button, "Remove a regra atualmente selecionada na lista.")
+
+        toggle_button = ttk.Button(buttons_frame, text="Ativar/Desativar Regra", command=self.toggle_rule)
+        toggle_button.pack(side="left", padx=5)
+        Tooltip(toggle_button, "Ativa ou desativa a regra selecionada.")
+
+        duplicate_button = ttk.Button(buttons_frame, text="Duplicar Regra", command=self.duplicate_rule)
+        duplicate_button.pack(side="left", padx=5)
+        Tooltip(duplicate_button, "Cria uma cópia da regra selecionada.")
 
         # Frame de instruções
         info_frame = ttk.LabelFrame(rules_tab, text="Instruções", padding=10)
@@ -275,6 +292,29 @@ class ProxyGUI:
 
         if self.config.toggle_rule(index):
             self.refresh_rules_list()
+
+    def duplicate_rule(self):
+        """Duplica a regra selecionada."""
+        selection = self.rules_tree.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione uma regra para duplicar!")
+            return
+
+        item = selection[0]
+        index = int(self.rules_tree.item(item)['text']) - 1
+
+        rule_to_duplicate = self.config.get_rules()[index]
+
+        host = rule_to_duplicate['host']
+        path = rule_to_duplicate['path']
+        param_name = rule_to_duplicate['param_name']
+        param_value = rule_to_duplicate['param_value']
+
+        if self.config.add_rule(host, path, param_name, param_value):
+            messagebox.showinfo("Sucesso", "Regra duplicada com sucesso!")
+            self.refresh_rules_list()
+        else:
+            messagebox.showerror("Erro", "Erro ao duplicar a regra!")
 
     def refresh_rules_list(self):
         """Atualiza a lista de regras na interface"""
