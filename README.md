@@ -201,6 +201,7 @@ InteceptProxy/
 - O proxy intercepta apenas requisições HTTP. Para HTTPS, você precisará instalar o certificado CA do mitmproxy no navegador
 - As configurações são salvas automaticamente no arquivo `intercept_config.json`
 - O proxy mantém todos os parâmetros não configurados com seus valores originais
+- **NOVO:** A atividade do proxy (regras aplicadas, erros) é registrada no arquivo `proxy.log` para facilitar a depuração.
 
 ## Solução de Problemas
 

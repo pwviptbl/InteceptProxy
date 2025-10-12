@@ -78,6 +78,7 @@ import asyncio
 from mitmproxy.tools.dump import DumpMaster
 from mitmproxy import options
 from core.addon import InterceptAddon
+from core.logger_config import log
 
 
 @cli.command('toggle')
@@ -111,13 +112,16 @@ def run_proxy():
     click.echo(click.style("🚀 Iniciando InteceptProxy em modo headless...", bold=True, fg="cyan"))
     click.echo(click.style("=" * 60, fg="cyan"))
 
+    log.info("Proxy (CLI) iniciando...")
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(start_proxy_headless(config))
     except KeyboardInterrupt:
         click.echo("\n✓ Proxy encerrado pelo usuário.")
+        log.info("Proxy (CLI) encerrado pelo usuário.")
     except Exception as e:
         click.echo(click.style(f"\n❌ Erro ao executar proxy: {e}", fg="red"))
+        log.error(f"Erro ao executar proxy (CLI): {e}", exc_info=True)
 
 
 async def start_proxy_headless(config):
