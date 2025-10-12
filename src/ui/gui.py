@@ -1,4 +1,5 @@
 import asyncio
+import queue
 import re
 import threading
 import tkinter as tk
@@ -27,6 +28,7 @@ class ProxyGUI:
         self.proxy_master = None
         self.proxy_loop = None
         self.history_map = {}
+        self.sender_results_queue = queue.Queue()
 
         # Janela principal com tema
         self.root = ThemedTk(theme="arc")
@@ -558,6 +560,52 @@ class ProxyGUI:
         start_sender_button.grid(row=5, column=0, columnspan=5, pady=20)
         Tooltip(start_sender_button, "Inicia o processo de envio em massa.")
 
+        # --- Feedback Visual ---
+        feedback_frame = ttk.Frame(sender_tab)
+        feedback_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Barra de Progresso
+        self.sender_progress = ttk.Progressbar(feedback_frame, orient="horizontal", length=100, mode="determinate")
+        self.sender_progress.pack(fill="x", pady=5)
+
+        # Frame de Resultados
+        results_frame = ttk.LabelFrame(feedback_frame, text="Resultados do Envio", padding=10)
+        results_frame.pack(fill="both", expand=True, pady=10)
+
+        # Tabela (Treeview) de Resultados
+        columns = ('URL', 'Status', 'Resultado')
+        self.sender_results_tree = ttk.Treeview(results_frame, columns=columns, show='headings', height=8)
+
+        self.sender_results_tree.heading('URL', text='URL')
+        self.sender_results_tree.heading('Status', text='Status')
+        self.sender_results_tree.heading('Resultado', text='Resultado')
+
+        self.sender_results_tree.column('URL', width=400)
+        self.sender_results_tree.column('Status', width=100, anchor="center")
+        self.sender_results_tree.column('Resultado', width=100, anchor="center")
+
+        # Configuração de tags para cores
+        self.sender_results_tree.tag_configure('success', foreground='green')
+        self.sender_results_tree.tag_configure('failure', foreground='red')
+
+        self.sender_results_tree.pack(side="left", fill="both", expand=True)
+
+        # Scrollbar para a tabela
+        results_scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=self.sender_results_tree.yview)
+        results_scrollbar.pack(side="right", fill="y")
+        self.sender_results_tree.configure(yscrollcommand=results_scrollbar.set)
+
+        # Botão para Limpar Resultados
+        clear_results_button = ttk.Button(feedback_frame, text="Limpar Resultados", command=self.clear_sender_results)
+        clear_results_button.pack(pady=5)
+        Tooltip(clear_results_button, "Limpa a tabela de resultados do envio.")
+
+    def clear_sender_results(self):
+        """Limpa a tabela de resultados da aba de repetição."""
+        for item in self.sender_results_tree.get_children():
+            self.sender_results_tree.delete(item)
+        self.sender_progress['value'] = 0
+
     def select_sender_file(self):
         """Abre uma caixa de diálogo para selecionar o arquivo de valores."""
         from tkinter import filedialog
@@ -570,6 +618,9 @@ class ProxyGUI:
 
     def start_sender(self):
         """Inicia o processo de envio com base na prioridade: arquivo, valor manual ou nenhum."""
+        self.clear_sender_results()
+        self.process_sender_queue()
+
         url = self.sender_url_entry.get().strip()
         file_path = self.sender_file_path.get().strip()
         manual_value = self.sender_manual_value_entry.get().strip()
@@ -591,10 +642,9 @@ class ProxyGUI:
                 return
 
             from src.core.sender import run_sender
-            thread = threading.Thread(target=run_sender, args=(url, file_path, param_name, threads), daemon=True)
+            thread = threading.Thread(target=run_sender, args=(url, file_path, param_name, threads, self.sender_results_queue), daemon=True)
             thread.start()
-            messagebox.showinfo("Iniciado",
-                                f"Envio em massa a partir de '{file_path}' foi iniciado. Monitore os logs para ver o progresso.")
+            messagebox.showinfo("Iniciado", "Envio em massa iniciado. Acompanhe o progresso na tabela de resultados.")
 
         # Prioridade 2: Envio único com valor manual
         elif manual_value:
@@ -603,16 +653,46 @@ class ProxyGUI:
                 return
 
             from src.core.sender import send_single_request
-            thread = threading.Thread(target=send_single_request, args=(url, param_name, manual_value), daemon=True)
+            thread = threading.Thread(target=send_single_request, args=(url, param_name, manual_value, self.sender_results_queue), daemon=True)
             thread.start()
-            messagebox.showinfo("Iniciado", "Envio com valor manual foi iniciado. Monitore os logs.")
 
         # Prioridade 3: Reenviar a requisição original
         else:
             from src.core.sender import send_request_no_params
-            thread = threading.Thread(target=send_request_no_params, args=(url,), daemon=True)
+            thread = threading.Thread(target=send_request_no_params, args=(url, self.sender_results_queue), daemon=True)
             thread.start()
-            messagebox.showinfo("Iniciado", "A requisição original foi reenviada. Monitore os logs.")
+
+    def process_sender_queue(self):
+        """Processa mensagens da fila do sender para atualizar a UI."""
+        try:
+            while True:
+                message = self.sender_results_queue.get_nowait()
+                msg_type = message.get('type')
+                data = message.get('data')
+
+                if msg_type == 'result':
+                    tag = 'success' if data['success'] else 'failure'
+                    result_text = "Sucesso" if data['success'] else "Falha"
+                    self.sender_results_tree.insert('', 'end', values=(data['url'], data['status'], result_text), tags=(tag,))
+                    self.sender_results_tree.yview_moveto(1)
+
+                elif msg_type == 'progress_start':
+                    self.sender_progress['maximum'] = message.get('total', 100)
+                    self.sender_progress['value'] = 0
+
+                elif msg_type == 'progress_update':
+                    self.sender_progress['value'] = message.get('value', 0)
+
+                elif msg_type == 'progress_done':
+                    self.sender_progress['value'] = self.sender_progress['maximum']
+
+                elif msg_type == 'error':
+                    messagebox.showerror("Erro no Envio", data)
+
+        except queue.Empty:
+            pass
+        finally:
+            self.root.after(100, self.process_sender_queue)
 
     def show_context_menu(self, event):
         """Exibe o menu de contexto no histórico de requisições."""
