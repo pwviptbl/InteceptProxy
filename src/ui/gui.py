@@ -56,6 +56,9 @@ class ProxyGUI:
         self.stop_button = ttk.Button(control_frame, text="Parar Proxy", command=self.stop_proxy, state="disabled")
         self.stop_button.pack(side="left", padx=5)
 
+        self.pause_button = ttk.Button(control_frame, text="Pausar", command=self.toggle_pause_proxy, state="disabled")
+        self.pause_button.pack(side="left", padx=5)
+
         ttk.Label(control_frame, text="Porta: 8080").pack(side="left", padx=5)
 
         # Notebook (Tabs)
@@ -385,6 +388,7 @@ class ProxyGUI:
         self.status_label.config(text="Status: Executando", foreground="green")
         self.start_button.config(state="disabled")
         self.stop_button.config(state="normal")
+        self.pause_button.config(state="normal")
 
         messagebox.showinfo("Proxy Iniciado",
                             "Proxy iniciado na porta 8080\n\n"
@@ -416,6 +420,23 @@ class ProxyGUI:
         self.status_label.config(text="Status: Parado", foreground="red")
         self.start_button.config(state="normal")
         self.stop_button.config(state="disabled")
+        self.pause_button.config(state="disabled", text="Pausar")
+
+    def toggle_pause_proxy(self):
+        """Alterna o estado de pausa do proxy e atualiza a UI."""
+        if not self.proxy_running:
+            return
+
+        is_paused = self.config.toggle_pause()
+
+        if is_paused:
+            self.status_label.config(text="Status: Pausado", foreground="orange")
+            self.pause_button.config(text="Continuar")
+            log.info("Proxy pausado.")
+        else:
+            self.status_label.config(text="Status: Executando", foreground="green")
+            self.pause_button.config(text="Pausar")
+            log.info("Proxy retomado.")
 
     def update_history_list(self):
         """Atualiza a lista de histórico periodicamente"""
