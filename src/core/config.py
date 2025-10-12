@@ -8,6 +8,7 @@ class InterceptConfig:
     def __init__(self, config_file="intercept_config.json"):
         self.config_file = config_file
         self.rules = []
+        self.paused = False
         self.load_config()
 
     def load_config(self):
@@ -62,3 +63,12 @@ class InterceptConfig:
             self.rules[index]['enabled'] = not self.rules[index]['enabled']
             return self.save_config()
         return False
+
+    def toggle_pause(self):
+        """Alterna o estado de pausa do proxy."""
+        self.paused = not self.paused
+        return self.paused
+
+    def is_paused(self):
+        """Verifica se o proxy está pausado."""
+        return self.paused
