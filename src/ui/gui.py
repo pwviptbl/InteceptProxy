@@ -1,4 +1,5 @@
 import asyncio
+import queue
 import re
 import threading
 import tkinter as tk
@@ -27,6 +28,7 @@ class ProxyGUI:
         self.proxy_master = None
         self.proxy_loop = None
         self.history_map = {}
+        self.sender_results_queue = queue.Queue()
 
         # Janela principal com tema
         self.root = ThemedTk(theme="arc")
@@ -530,23 +532,79 @@ class ProxyGUI:
         file_button.grid(row=1, column=3, sticky="w", padx=5, pady=5)
         Tooltip(file_button, "Selecione um arquivo .txt com um valor por linha.")
 
+        clear_button = ttk.Button(sender_frame, text="Limpar", command=lambda: self.sender_file_path.set(""))
+        clear_button.grid(row=1, column=4, sticky="w", padx=5, pady=5)
+        Tooltip(clear_button, "Limpa o caminho do arquivo selecionado.")
+
         # Nome do Parâmetro a ser Substituído
         ttk.Label(sender_frame, text="Parâmetro a Substituir:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
         self.sender_param_entry = ttk.Entry(sender_frame, width=30)
         self.sender_param_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
         Tooltip(self.sender_param_entry, "Nome do parâmetro na URL cujo valor será substituído por cada linha do arquivo.")
 
+        # Valor Manual
+        ttk.Label(sender_frame, text="Valor Manual:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        self.sender_manual_value_entry = ttk.Entry(sender_frame, width=30)
+        self.sender_manual_value_entry.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+        Tooltip(self.sender_manual_value_entry, "Um valor único para ser usado na substituição do parâmetro.")
+
         # Número de Threads
-        ttk.Label(sender_frame, text="Threads:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        ttk.Label(sender_frame, text="Threads:").grid(row=4, column=0, sticky="w", padx=5, pady=5)
         self.sender_threads_spinbox = ttk.Spinbox(sender_frame, from_=1, to=100, width=10)
         self.sender_threads_spinbox.set("10")
-        self.sender_threads_spinbox.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+        self.sender_threads_spinbox.grid(row=4, column=1, sticky="w", padx=5, pady=5)
         Tooltip(self.sender_threads_spinbox, "Número de requisições simultâneas.")
 
         # Botão de Iniciar
         start_sender_button = ttk.Button(sender_frame, text="Iniciar Envio", command=self.start_sender)
-        start_sender_button.grid(row=4, column=0, columnspan=4, pady=20)
+        start_sender_button.grid(row=5, column=0, columnspan=5, pady=20)
         Tooltip(start_sender_button, "Inicia o processo de envio em massa.")
+
+        # --- Feedback Visual ---
+        feedback_frame = ttk.Frame(sender_tab)
+        feedback_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Barra de Progresso
+        self.sender_progress = ttk.Progressbar(feedback_frame, orient="horizontal", length=100, mode="determinate")
+        self.sender_progress.pack(fill="x", pady=5)
+
+        # Frame de Resultados
+        results_frame = ttk.LabelFrame(feedback_frame, text="Resultados do Envio", padding=10)
+        results_frame.pack(fill="both", expand=True, pady=10)
+
+        # Tabela (Treeview) de Resultados
+        columns = ('URL', 'Status', 'Resultado')
+        self.sender_results_tree = ttk.Treeview(results_frame, columns=columns, show='headings', height=8)
+
+        self.sender_results_tree.heading('URL', text='URL')
+        self.sender_results_tree.heading('Status', text='Status')
+        self.sender_results_tree.heading('Resultado', text='Resultado')
+
+        self.sender_results_tree.column('URL', width=400)
+        self.sender_results_tree.column('Status', width=100, anchor="center")
+        self.sender_results_tree.column('Resultado', width=100, anchor="center")
+
+        # Configuração de tags para cores
+        self.sender_results_tree.tag_configure('success', foreground='green')
+        self.sender_results_tree.tag_configure('failure', foreground='red')
+
+        self.sender_results_tree.pack(side="left", fill="both", expand=True)
+
+        # Scrollbar para a tabela
+        results_scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=self.sender_results_tree.yview)
+        results_scrollbar.pack(side="right", fill="y")
+        self.sender_results_tree.configure(yscrollcommand=results_scrollbar.set)
+
+        # Botão para Limpar Resultados
+        clear_results_button = ttk.Button(feedback_frame, text="Limpar Resultados", command=self.clear_sender_results)
+        clear_results_button.pack(pady=5)
+        Tooltip(clear_results_button, "Limpa a tabela de resultados do envio.")
+
+    def clear_sender_results(self):
+        """Limpa a tabela de resultados da aba de repetição."""
+        for item in self.sender_results_tree.get_children():
+            self.sender_results_tree.delete(item)
+        self.sender_progress['value'] = 0
 
     def select_sender_file(self):
         """Abre uma caixa de diálogo para selecionar o arquivo de valores."""
@@ -559,30 +617,82 @@ class ProxyGUI:
             self.sender_file_path.set(filepath)
 
     def start_sender(self):
-        """Inicia o processo de envio em massa a partir da aba Repetição."""
+        """Inicia o processo de envio com base na prioridade: arquivo, valor manual ou nenhum."""
+        self.clear_sender_results()
+        self.process_sender_queue()
+
         url = self.sender_url_entry.get().strip()
         file_path = self.sender_file_path.get().strip()
+        manual_value = self.sender_manual_value_entry.get().strip()
         param_name = self.sender_param_entry.get().strip()
 
+        if not url:
+            messagebox.showwarning("Aviso", "A URL Alvo é obrigatória.")
+            return
+
+        # Prioridade 1: Envio em massa com arquivo
+        if file_path:
+            if not param_name:
+                messagebox.showwarning("Aviso", "O 'Parâmetro a Substituir' é obrigatório ao usar um arquivo.")
+                return
+            try:
+                threads = int(self.sender_threads_spinbox.get())
+            except ValueError:
+                messagebox.showerror("Erro", "O número de threads deve ser um inteiro válido.")
+                return
+
+            from src.core.sender import run_sender
+            thread = threading.Thread(target=run_sender, args=(url, file_path, param_name, threads, self.sender_results_queue), daemon=True)
+            thread.start()
+            messagebox.showinfo("Iniciado", "Envio em massa iniciado. Acompanhe o progresso na tabela de resultados.")
+
+        # Prioridade 2: Envio único com valor manual
+        elif manual_value:
+            if not param_name:
+                messagebox.showwarning("Aviso", "O 'Parâmetro a Substituir' é obrigatório ao usar um valor manual.")
+                return
+
+            from src.core.sender import send_single_request
+            thread = threading.Thread(target=send_single_request, args=(url, param_name, manual_value, self.sender_results_queue), daemon=True)
+            thread.start()
+
+        # Prioridade 3: Reenviar a requisição original
+        else:
+            from src.core.sender import send_request_no_params
+            thread = threading.Thread(target=send_request_no_params, args=(url, self.sender_results_queue), daemon=True)
+            thread.start()
+
+    def process_sender_queue(self):
+        """Processa mensagens da fila do sender para atualizar a UI."""
         try:
-            threads = int(self.sender_threads_spinbox.get())
-        except ValueError:
-            messagebox.showerror("Erro", "O número de threads deve ser um inteiro válido.")
-            return
+            while True:
+                message = self.sender_results_queue.get_nowait()
+                msg_type = message.get('type')
+                data = message.get('data')
 
-        if not all([url, file_path, param_name]):
-            messagebox.showwarning("Aviso", "Todos os campos de configuração devem ser preenchidos.")
-            return
+                if msg_type == 'result':
+                    tag = 'success' if data['success'] else 'failure'
+                    result_text = "Sucesso" if data['success'] else "Falha"
+                    self.sender_results_tree.insert('', 'end', values=(data['url'], data['status'], result_text), tags=(tag,))
+                    self.sender_results_tree.yview_moveto(1)
 
-        # Executa o sender em uma thread para não bloquear a UI
-        from src.core.sender import run_sender
-        thread = threading.Thread(
-            target=run_sender,
-            args=(url, file_path, param_name, threads),
-            daemon=True
-        )
-        thread.start()
-        messagebox.showinfo("Iniciado", f"O envio em massa foi iniciado. Monitore o arquivo de log ou a aba de Histórico para ver o progresso.")
+                elif msg_type == 'progress_start':
+                    self.sender_progress['maximum'] = message.get('total', 100)
+                    self.sender_progress['value'] = 0
+
+                elif msg_type == 'progress_update':
+                    self.sender_progress['value'] = message.get('value', 0)
+
+                elif msg_type == 'progress_done':
+                    self.sender_progress['value'] = self.sender_progress['maximum']
+
+                elif msg_type == 'error':
+                    messagebox.showerror("Erro no Envio", data)
+
+        except queue.Empty:
+            pass
+        finally:
+            self.root.after(100, self.process_sender_queue)
 
     def show_context_menu(self, event):
         """Exibe o menu de contexto no histórico de requisições."""
