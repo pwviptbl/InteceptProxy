@@ -42,3 +42,6 @@ intercept_config.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+proxy.log

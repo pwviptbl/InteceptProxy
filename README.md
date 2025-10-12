@@ -17,6 +17,7 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
 - ✅ **NOVO:** Histórico de requisições com filtros avançados
 - ✅ **NOVO:** Visualização detalhada de Request/Response
 - ✅ **NOVO:** Filtros por método HTTP e regex de domínio
+- ✅ **NOVO:** Interface de Linha de Comando (CLI) para gerenciamento de regras e execução headless
 
 ## Instalação
 
@@ -97,6 +98,58 @@ Use as configurações de sistema ou extensões como "Proxy SwitchyOmega"
 
 Navegue normalmente. Quando acessar uma URL que corresponda às regras configuradas, os parâmetros serão automaticamente substituídos.
 
+### Uso via Linha de Comando (CLI)
+
+A aplicação também pode ser controlada via terminal usando `cli.py`.
+
+#### Listar Regras
+```bash
+python cli.py list
+```
+
+#### Adicionar uma Regra
+```bash
+python cli.py add --host exemplo.com --path /login --param user --value admin
+```
+
+#### Remover uma Regra
+Use o índice (o número # da lista) para remover.
+```bash
+python cli.py remove 1
+```
+
+#### Ativar/Desativar uma Regra
+Use o índice para ativar ou desativar.
+```bash
+python cli.py toggle 1
+```
+
+#### Iniciar o Proxy (Headless)
+```bash
+python cli.py run
+```
+
+#### Enviar Requisições em Massa (Sender)
+Para automatizar testes de carga ou fuzzing, use o comando `send`. Crie um arquivo `lista.txt` com um valor por linha.
+
+```bash
+# Exemplo de conteúdo para lista.txt
+valor1
+valor2
+valor3
+```
+
+```bash
+python cli.py send --url http://exemplo.com/api --file lista.txt --param userID --threads 10
+```
+Este comando enviará requisições para `http://exemplo.com/api?userID=valor1`, `.../api?userID=valor2`, etc., usando 10 threads simultâneas.
+
+#### Obter Informações do Sistema
+Para ajudar a decidir o número de threads, use o comando `info`.
+```bash
+python cli.py info
+```
+
 ## Exemplo de Uso
 
 **Configuração:**
@@ -116,10 +169,13 @@ O parâmetro `Titulo` é substituído por `teste1`, mas o parâmetro `Nome` perm
 
 ```
 InteceptProxy/
-├── intercept_proxy.py       # Script principal com GUI e lógica do proxy
-├── requirements.txt          # Dependências Python
-├── intercept_config.json     # Arquivo de configuração (gerado automaticamente)
-└── README.md                 # Este arquivo
+├── src/
+│   ├── core/               # Lógica principal do proxy
+│   └── ui/                 # Interface gráfica
+├── cli.py                  # Ponto de entrada para a CLI
+├── intercept_proxy.py      # Ponto de entrada para a GUI
+├── requirements.txt        # Dependências
+└── README.md
 ```
 
 ## Gerenciamento de Regras
@@ -140,6 +196,7 @@ InteceptProxy/
 - O proxy intercepta apenas requisições HTTP. Para HTTPS, você precisará instalar o certificado CA do mitmproxy no navegador
 - As configurações são salvas automaticamente no arquivo `intercept_config.json`
 - O proxy mantém todos os parâmetros não configurados com seus valores originais
+- **NOVO:** A atividade do proxy (regras aplicadas, erros) é registrada no arquivo `proxy.log` para facilitar a depuração.
 
 ## Solução de Problemas
 
