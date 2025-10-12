@@ -1,73 +1,127 @@
 import concurrent.futures
 import requests
 import os
+from urllib.parse import urlencode, parse_qs
 from .logger_config import log
-
 import re
 
-def send_single_request(url, param_name, value):
+def _substitute_value(source: str, param_name: str, new_value: str) -> str:
+    """Helper to substitute a value in a query string or form-urlencoded body."""
+    # Pattern to find the parameter and its value
+    pattern = re.compile(f"([?&]|^)({re.escape(param_name)}=)([^&]*)")
+
+    if pattern.search(source):
+        # Substitute the value if the parameter is found
+        return pattern.sub(f"\\1\\2{new_value}", source)
+    else:
+        # Append the parameter if it's not found
+        if '?' not in source:
+            return f"{source}?{param_name}={new_value}"
+        else:
+            return f"{source}&{param_name}={new_value}"
+
+def send_from_raw(raw_request: str, param_name: str = None, new_value: str = None):
     """
-    Envia uma única requisição HTTP através do proxy, substituindo o valor
-    do parâmetro especificado na URL.
+    Parses a raw HTTP request, optionally substitutes a parameter,
+    and resends it, returning the response object.
     """
     try:
-        # Garante que o valor não tenha quebras de linha
-        payload = value.strip()
+        # Separate the request into head and body
+        head, body = raw_request.strip().split('\n\n', 1) if '\n\n' in raw_request else (raw_request.strip(), "")
+        request_lines = head.split('\n')
 
-        # Tenta substituir o valor do parâmetro na URL
-        # Esta regex busca por `param_name=valor` e substitui `valor`
-        pattern = re.compile(f"({param_name}=)([^&]*)")
+        # 1. Parse the first line
+        method, path, _ = request_lines[0].split(' ')
 
-        if pattern.search(url):
-            full_url = pattern.sub(f"\\g<1>{payload}", url)
-        else:
-            # Se o parâmetro não existir, adiciona no final
-            separator = '&' if '?' in url else '?'
-            full_url = f"{url}{separator}{param_name}={payload}"
+        # 2. Parse Headers
+        headers = {}
+        for line in request_lines[1:]:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                headers[key.strip()] = value.strip()
 
-        proxies = {
-            "http": "http://127.0.0.1:8080",
-            "https": "http://127.0.0.1:8080",
-        }
+        # 3. Build URL
+        host = headers.get("Host")
+        if not host:
+            raise ValueError("Header 'Host' não encontrado.")
+        scheme = "https"  # Assume HTTPS
+        base_url = f"{scheme}://{host}"
 
-        response = requests.get(
-            full_url,
+        # 4. Substitute parameter
+        if param_name and new_value is not None:
+            new_value = str(new_value).strip()
+            # Try in URL path/query
+            if param_name in path:
+                path = _substitute_value(path, param_name, new_value)
+            # Try in urlencoded body
+            elif body and "application/x-www-form-urlencoded" in headers.get("Content-Type", ""):
+                 body = _substitute_value(body, param_name, new_value)
+            # Otherwise, add to URL
+            else:
+                path = _substitute_value(path, param_name, new_value)
+
+        full_url = f"{base_url}{path}"
+
+        # 5. Prepare for resending
+        headers_to_send = {k: v for k, v in headers.items() if k.lower() not in ['host', 'content-length']}
+
+        proxies = {"http": "http://127.0.0.1:8080", "https": "http://127.0.0.1:8080"}
+
+        log.info(f"Resending request: {method} {full_url}")
+
+        response = requests.request(
+            method=method,
+            url=full_url,
+            headers=headers_to_send,
+            data=body.encode('utf-8') if body else None,
             proxies=proxies,
-            verify=False  # Necessário por estarmos passando pelo mitmproxy
+            verify=False
         )
 
-        if response.status_code in [200, 201, 204]:
-            log.info(f"Sender: Requisição para '{full_url}' enviada com sucesso (Status: {response.status_code}).")
-            return True
-        else:
-            log.warning(f"Sender: Requisição para '{full_url}' retornou status inesperado: {response.status_code}.")
-            return False
+        log.info(f"Response received: {response.status_code}")
+        return response
 
-    except requests.RequestException as e:
-        log.error(f"Sender: Erro ao enviar requisição para '{full_url}': {e}")
-        return False
+    except Exception as e:
+        log.error(f"Error resending request: {e}", exc_info=True)
+        return None
 
-def run_sender(url, file_path, param_name, num_threads):
+def run_sender_from_file(raw_request: str, file_path: str, param_name: str, num_threads: int, queue=None):
     """
-    Lê um arquivo e envia requisições em paralelo.
+    Reads a file and resends the base request for each value in the file, in parallel.
     """
     if not os.path.exists(file_path):
-        log.error(f"Sender: O arquivo '{file_path}' não foi encontrado.")
+        log.error(f"Sender: File '{file_path}' not found.")
+        if queue:
+            queue.put({'type': 'error', 'data': f"File '{file_path}' not found."})
         return
 
     with open(file_path, 'r', encoding='utf-8') as f:
         values = f.readlines()
 
     total_requests = len(values)
-    log.info(f"Sender: Iniciando envio de {total_requests} requisições usando {num_threads} threads...")
+    log.info(f"Sender: Starting bulk send of {total_requests} requests.")
+    if queue:
+        queue.put({'type': 'progress_start', 'total': total_requests})
 
-    success_count = 0
+    completed_requests = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        # Cria uma future para cada requisição
-        future_to_value = {executor.submit(send_single_request, url, param_name, value): value for value in values}
+        futures = [executor.submit(send_from_raw, raw_request, param_name, value) for value in values]
 
-        for future in concurrent.futures.as_completed(future_to_value):
-            if future.result():
-                success_count += 1
+        for future in concurrent.futures.as_completed(futures):
+            response = future.result()
+            completed_requests += 1
+            if queue:
+                progress = (completed_requests / total_requests) * 100
+                queue.put({'type': 'progress_update', 'value': progress})
 
-    log.info(f"Sender: Envio concluído. {success_count}/{total_requests} requisições enviadas com sucesso.")
+                if response:
+                    success = 200 <= response.status_code < 300
+                    result_data = {'url': response.request.url, 'status': response.status_code, 'success': success, 'response': response}
+                else:
+                    result_data = {'url': 'N/A', 'status': 'Error', 'success': False, 'response': None}
+
+                queue.put({'type': 'result', 'data': result_data})
+
+    log.info("Sender: Bulk send completed.")
+    if queue:
+        queue.put({'type': 'progress_done'})
