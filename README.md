@@ -155,6 +155,27 @@ python cli.py toggle 1
 python cli.py run
 ```
 
+#### Enviar Requisições em Massa (Sender)
+Para automatizar testes de carga ou fuzzing, use o comando `send`. Crie um arquivo `lista.txt` com um valor por linha.
+
+```bash
+# Exemplo de conteúdo para lista.txt
+valor1
+valor2
+valor3
+```
+
+```bash
+python cli.py send --url http://exemplo.com/api --file lista.txt --param userID --threads 10
+```
+Este comando enviará requisições para `http://exemplo.com/api?userID=valor1`, `.../api?userID=valor2`, etc., usando 10 threads simultâneas.
+
+#### Obter Informações do Sistema
+Para ajudar a decidir o número de threads, use o comando `info`.
+```bash
+python cli.py info
+```
+
 ## Exemplo de Uso
 
 **Configuração:**

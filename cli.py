@@ -79,6 +79,7 @@ from mitmproxy.tools.dump import DumpMaster
 from mitmproxy import options
 from core.addon import InterceptAddon
 from core.logger_config import log
+from core.sender import run_sender
 
 
 @cli.command('toggle')
@@ -134,6 +135,37 @@ async def start_proxy_headless(config):
     click.echo("Pressione Ctrl+C para parar.")
 
     await master.run()
+
+
+@cli.command('info')
+def system_info():
+    """Exibe informações do sistema, como o número de núcleos de CPU."""
+    cpu_cores = os.cpu_count() or 1
+    max_recommended_threads = cpu_cores * 5
+    click.echo(click.style("======= Informações do Sistema =======", bold=True))
+    click.echo(f"- Número de núcleos de CPU lógicos: {cpu_cores}")
+    click.echo(f"- Máximo de threads recomendadas: ~{max_recommended_threads}")
+    click.echo("\nUse o número de núcleos como uma base para definir a quantidade de threads.")
+    click.echo("Um valor comum e seguro é (núcleo * 5).")
+
+
+@cli.command('send')
+@click.option('--url', required=True, help="URL base para enviar as requisições (sem o parâmetro).")
+@click.option('--file', 'file_path', required=True, type=click.Path(exists=True), help="Caminho do arquivo .txt com os valores.")
+@click.option('--param', 'param_name', required=True, help="Nome do parâmetro que receberá os valores.")
+@click.option('--threads', type=int, default=10, show_default=True, help="Número de threads simultâneas.")
+def send_requests(url, file_path, param_name, threads):
+    """Envia requisições em massa com base em uma lista de um arquivo."""
+    max_threads = (os.cpu_count() or 1) * 5
+    if threads > max_threads:
+        click.echo(click.style(f"Aviso: O número de threads ({threads}) é alto. O máximo recomendado é ~{max_threads}.", fg='yellow'))
+
+    # Valida se a URL tem um placeholder para o parâmetro
+    if '?' in url or '=' in url:
+        click.echo(click.style("Erro: A URL não deve conter '?' ou '='. Informe a URL base e o parâmetro separadamente.", fg='red'))
+        return
+
+    run_sender(url, file_path, param_name, threads)
 
 
 if __name__ == "__main__":
