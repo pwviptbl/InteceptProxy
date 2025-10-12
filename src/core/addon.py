@@ -3,6 +3,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 from .config import InterceptConfig
 from .history import RequestHistory
+from .logger_config import log
 
 
 class InterceptAddon:
@@ -60,7 +61,7 @@ class InterceptAddon:
                         request.query.clear()
                         for key, value in query_dict.items():
                             request.query[key] = value
-                        print(f"[GET] Modificado: {rule['param_name']}={rule['param_value']} em {request.pretty_url}")
+                        log.info(f"Regra GET aplicada: '{rule['param_name']}' -> '{rule['param_value']}' em {request.pretty_url}")
 
                 # Modifica parâmetros no corpo (POST)
                 if request.method == "POST" and request.content:
@@ -77,7 +78,7 @@ class InterceptAddon:
                             # Reconstrói o corpo
                             new_body = urlencode(params, doseq=True)
                             request.content = new_body.encode('utf-8')
-                            print(f"[POST] Modificado: {rule['param_name']}={rule['param_value']} em {request.pretty_url}")
+                            log.info(f"Regra POST aplicada: '{rule['param_name']}' -> '{rule['param_value']}' em {request.pretty_url}")
 
     def response(self, flow: http.HTTPFlow) -> None:
         """Intercepta respostas HTTP e armazena no histórico"""

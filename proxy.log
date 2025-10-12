@@ -1,0 +1,3 @@
+2025-10-12 01:53:15 - INFO - Proxy (CLI) iniciando...
+2025-10-12 01:53:19 - INFO - Regra GET aplicada: 'data' -> 'logged' em http://logtest.com/test?data=logged
+2025-10-12 01:54:24 - INFO - Regra GET aplicada: 'param1' -> 'modificado' em <Mock name='mock.request.pretty_url' id='140481317553648'>

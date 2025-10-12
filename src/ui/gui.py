@@ -11,6 +11,7 @@ from ttkthemes import ThemedTk
 from src.core.addon import InterceptAddon
 from src.core.config import InterceptConfig
 from src.core.history import RequestHistory
+from src.core.logger_config import log
 from .tooltip import Tooltip
 
 
@@ -335,6 +336,7 @@ class ProxyGUI:
             messagebox.showwarning("Aviso", "Proxy já está em execução!")
             return
 
+        log.info("Proxy (GUI) iniciando...")
         def run_proxy():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -349,7 +351,7 @@ class ProxyGUI:
                     await master.run()
                 except Exception as err:
                     err_msg = str(err)
-                    print(f"Erro no proxy: {err_msg}")
+                    log.error(f"Falha ao iniciar o proxy (GUI): {err_msg}", exc_info=True)
                     self.root.after(0, lambda message=err_msg: messagebox.showerror("Erro",
                                                                                     f"Falha ao iniciar o proxy: {message}"))
                 finally:
@@ -390,6 +392,7 @@ class ProxyGUI:
             messagebox.showinfo("Proxy", "Proxy já está parado.")
             return
 
+        log.info("Proxy (GUI) finalizando...")
         if self.proxy_master is not None and self.proxy_loop is not None:
             try:
                 asyncio.run_coroutine_threadsafe(self.proxy_master.shutdown(), self.proxy_loop)
