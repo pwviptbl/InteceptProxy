@@ -10,6 +10,7 @@ from mitmproxy import options
 from mitmproxy.tools.dump import DumpMaster
 from ttkthemes import ThemedTk
 
+from src.core import decoder
 from src.core.addon import InterceptAddon
 from src.core.config import InterceptConfig
 from src.core.history import RequestHistory
@@ -77,6 +78,9 @@ class ProxyGUI:
 
         # Tab 4: Sender
         self.setup_sender_tab()
+
+        # Tab 5: Decoder
+        self.setup_decoder_tab()
 
     def setup_rules_tab(self):
         """Configura a aba de regras"""
@@ -842,6 +846,62 @@ class ProxyGUI:
         # Preenche a área de texto
         self.sender_request_text.delete('1.0', tk.END)
         self.sender_request_text.insert('1.0', request_info)
+
+    def _handle_decode_action(self, action_function):
+        """Função auxiliar para executar uma ação de encode/decode."""
+        input_text = self.decoder_input_text.get("1.0", tk.END).strip()
+        if not input_text:
+            return
+
+        result = action_function(input_text)
+
+        self.decoder_output_text.delete("1.0", tk.END)
+        self.decoder_output_text.insert("1.0", result)
+
+    def setup_decoder_tab(self):
+        """Configura a aba da ferramenta Decoder."""
+        decoder_tab = ttk.Frame(self.notebook)
+        self.notebook.add(decoder_tab, text="Decoder")
+
+        # PanedWindow para dividir a área de texto dos botões
+        main_paned = ttk.PanedWindow(decoder_tab, orient=tk.VERTICAL)
+        main_paned.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Frame superior com as áreas de texto
+        text_frame = ttk.Frame(main_paned)
+        main_paned.add(text_frame, weight=4)
+
+        text_paned = ttk.PanedWindow(text_frame, orient=tk.HORIZONTAL)
+        text_paned.pack(fill="both", expand=True)
+
+        # Input Text
+        input_frame = ttk.LabelFrame(text_paned, text="Input", padding=5)
+        text_paned.add(input_frame, weight=1)
+        self.decoder_input_text = scrolledtext.ScrolledText(input_frame, wrap=tk.WORD, height=15)
+        self.decoder_input_text.pack(fill="both", expand=True)
+
+        # Output Text
+        output_frame = ttk.LabelFrame(text_paned, text="Output", padding=5)
+        text_paned.add(output_frame, weight=1)
+        self.decoder_output_text = scrolledtext.ScrolledText(output_frame, wrap=tk.WORD, height=15)
+        self.decoder_output_text.pack(fill="both", expand=True)
+
+
+        # Frame inferior com os botões
+        buttons_frame = ttk.LabelFrame(main_paned, text="Ações", padding=10)
+        main_paned.add(buttons_frame, weight=1)
+
+        # Botões de Base64
+        ttk.Button(buttons_frame, text="Encode Base64",
+                   command=lambda: self._handle_decode_action(decoder.b64_encode)).grid(row=0, column=0, padx=5, pady=5)
+        ttk.Button(buttons_frame, text="Decode Base64",
+                   command=lambda: self._handle_decode_action(decoder.b64_decode)).grid(row=0, column=1, padx=5, pady=5)
+
+        # Botões de URL
+        ttk.Button(buttons_frame, text="URL Encode",
+                   command=lambda: self._handle_decode_action(decoder.url_encode)).grid(row=1, column=0, padx=5, pady=5)
+        ttk.Button(buttons_frame, text="URL Decode",
+                   command=lambda: self._handle_decode_action(decoder.url_decode)).grid(row=1, column=1, padx=5, pady=5)
 
     def run(self):
         """Inicia a aplicação"""
