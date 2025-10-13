@@ -72,7 +72,10 @@ class ProxyGUI:
         # Tab 2: Histórico de Requisições
         self.setup_history_tab()
 
-        # Tab 3: Repetição (Sender)
+        # Tab 3: Repetição
+        self.setup_repeater_tab()
+
+        # Tab 4: Sender
         self.setup_sender_tab()
 
     def setup_rules_tab(self):
@@ -526,56 +529,34 @@ class ProxyGUI:
             self.apply_history_filter()
             messagebox.showinfo("Sucesso", "Histórico limpo com sucesso!")
 
-    def setup_sender_tab(self):
-        """Configura a aba de Repetição (Sender) com abas para Request e Response."""
-        sender_tab = ttk.Frame(self.notebook)
-        self.notebook.add(sender_tab, text="Repetição")
+    def setup_repeater_tab(self):
+        """Configura a aba de Repetição manual."""
+        repeater_tab = ttk.Frame(self.notebook)
+        self.notebook.add(repeater_tab, text="Repetição")
 
         # Frame superior para configuração
-        config_frame = ttk.LabelFrame(sender_tab, text="Configuração do Reenvio", padding=10)
+        config_frame = ttk.LabelFrame(repeater_tab, text="Configuração do Reenvio", padding=10)
         config_frame.pack(fill="x", padx=10, pady=5)
 
         # Parâmetro a Substituir
         ttk.Label(config_frame, text="Parâmetro a Substituir:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.sender_param_entry = ttk.Entry(config_frame, width=30)
-        self.sender_param_entry.grid(row=0, column=1, sticky="w", padx=5, pady=5)
-        Tooltip(self.sender_param_entry, "Nome do parâmetro a ser substituído (na URL ou no Body).")
+        self.repeater_param_entry = ttk.Entry(config_frame, width=30)
+        self.repeater_param_entry.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+        Tooltip(self.repeater_param_entry, "Nome do parâmetro a ser substituído (na URL ou no Body).")
 
         # Novo Valor
-        ttk.Label(config_frame, text="Novo Valor (Manual):").grid(row=0, column=2, sticky="w", padx=5, pady=5)
-        self.sender_manual_value_entry = ttk.Entry(config_frame, width=30)
-        self.sender_manual_value_entry.grid(row=0, column=3, sticky="w", padx=5, pady=5)
-        Tooltip(self.sender_manual_value_entry, "Valor que substituirá o original. Deixe em branco para usar um arquivo.")
-
-        # Arquivo de Lista
-        ttk.Label(config_frame, text="Ou usar Arquivo (.txt):").grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        self.sender_file_path = tk.StringVar()
-        file_entry = ttk.Entry(config_frame, textvariable=self.sender_file_path, width=50, state="readonly")
-        file_entry.grid(row=1, column=1, columnspan=2, sticky="we", padx=5, pady=5)
-        file_button = ttk.Button(config_frame, text="Selecionar...", command=self.select_sender_file)
-        file_button.grid(row=1, column=3, sticky="w", padx=5, pady=5)
-        Tooltip(file_button, "Use para envios em massa. Um valor por linha.")
-
-        # Valor Manual
-        ttk.Label(sender_frame, text="Valor Manual:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
-        self.sender_manual_value_entry = ttk.Entry(sender_frame, width=30)
-        self.sender_manual_value_entry.grid(row=3, column=1, sticky="w", padx=5, pady=5)
-        Tooltip(self.sender_manual_value_entry, "Um valor único para ser usado na substituição do parâmetro.")
-
-        # Número de Threads
-        ttk.Label(config_frame, text="Threads:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
-        self.sender_threads_spinbox = ttk.Spinbox(config_frame, from_=1, to=100, width=10)
-        self.sender_threads_spinbox.set("10")
-        self.sender_threads_spinbox.grid(row=2, column=1, sticky="w", padx=5, pady=5)
-        Tooltip(self.sender_threads_spinbox, "Número de requisições simultâneas para envios em massa.")
+        ttk.Label(config_frame, text="Novo Valor:").grid(row=0, column=2, sticky="w", padx=5, pady=5)
+        self.repeater_manual_value_entry = ttk.Entry(config_frame, width=30)
+        self.repeater_manual_value_entry.grid(row=0, column=3, sticky="w", padx=5, pady=5)
+        Tooltip(self.repeater_manual_value_entry, "Valor que substituirá o original.")
 
         # Botão de Iniciar
-        start_sender_button = ttk.Button(config_frame, text="Reenviar Requisição", command=self.start_sender)
-        start_sender_button.grid(row=3, column=0, columnspan=4, pady=15)
-        Tooltip(start_sender_button, "Inicia o processo de reenvio.")
+        start_repeater_button = ttk.Button(config_frame, text="Reenviar Requisição", command=self.start_repeater)
+        start_repeater_button.grid(row=1, column=0, columnspan=4, pady=15)
+        Tooltip(start_repeater_button, "Inicia o processo de reenvio manual.")
 
         # PanedWindow para dividir Request e Response
-        paned = ttk.PanedWindow(sender_tab, orient=tk.VERTICAL)
+        paned = ttk.PanedWindow(repeater_tab, orient=tk.VERTICAL)
         paned.pack(fill="both", expand=True, padx=10, pady=5)
 
         # Frame para Request
@@ -589,6 +570,48 @@ class ProxyGUI:
         paned.add(response_frame, weight=1)
         self.repeater_response_text = scrolledtext.ScrolledText(response_frame, wrap=tk.WORD, height=10)
         self.repeater_response_text.pack(fill="both", expand=True)
+
+    def setup_sender_tab(self):
+        """Configura a aba de Sender (envios em massa)."""
+        sender_tab = ttk.Frame(self.notebook)
+        self.notebook.add(sender_tab, text="Sender")
+
+        # Frame superior para configuração
+        config_frame = ttk.LabelFrame(sender_tab, text="Configuração de Envio em Massa", padding=10)
+        config_frame.pack(fill="x", padx=10, pady=5)
+
+        # Parâmetro a Substituir
+        ttk.Label(config_frame, text="Parâmetro a Substituir:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        self.sender_param_entry = ttk.Entry(config_frame, width=30)
+        self.sender_param_entry.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+        Tooltip(self.sender_param_entry, "Nome do parâmetro a ser substituído (na URL ou no Body).")
+
+        # Arquivo de Lista
+        ttk.Label(config_frame, text="Arquivo de Valores (.txt):").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        self.sender_file_path = tk.StringVar()
+        file_entry = ttk.Entry(config_frame, textvariable=self.sender_file_path, width=50, state="readonly")
+        file_entry.grid(row=1, column=1, columnspan=2, sticky="we", padx=5, pady=5)
+        file_button = ttk.Button(config_frame, text="Selecionar...", command=self.select_sender_file)
+        file_button.grid(row=1, column=3, sticky="w", padx=5, pady=5)
+        Tooltip(file_button, "Use para envios em massa. Um valor por linha.")
+
+        # Número de Threads
+        ttk.Label(config_frame, text="Threads:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        self.sender_threads_spinbox = ttk.Spinbox(config_frame, from_=1, to=100, width=10)
+        self.sender_threads_spinbox.set("10")
+        self.sender_threads_spinbox.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        Tooltip(self.sender_threads_spinbox, "Número de requisições simultâneas para envios em massa.")
+
+        # Botão de Iniciar
+        start_sender_button = ttk.Button(config_frame, text="Iniciar Envio em Massa", command=self.start_sender)
+        start_sender_button.grid(row=3, column=0, columnspan=4, pady=15)
+        Tooltip(start_sender_button, "Inicia o processo de reenvio.")
+
+        # --- Requisição ---
+        request_frame = ttk.LabelFrame(sender_tab, text="Request Base", padding=5)
+        request_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        self.sender_request_text = scrolledtext.ScrolledText(request_frame, wrap=tk.WORD, height=10)
+        self.sender_request_text.pack(fill="both", expand=True)
 
         # --- Feedback Visual ---
         feedback_frame = ttk.Frame(sender_tab)
@@ -646,42 +669,81 @@ class ProxyGUI:
         if filepath:
             self.sender_file_path.set(filepath)
 
-    def start_sender(self):
-        """Inicia o processo de reenvio a partir da aba Repetição."""
+    def start_repeater(self):
+        """Inicia o processo de reenvio manual a partir da aba Repetição."""
         raw_request = self.repeater_request_text.get("1.0", tk.END).strip()
         if not raw_request:
             messagebox.showwarning("Aviso", "Não há nenhuma requisição para reenviar.")
             return
 
-        param_name = self.sender_param_entry.get().strip()
-        manual_value = self.sender_manual_value_entry.get().strip()
-        file_path = self.sender_file_path.get().strip()
+        param_name = self.repeater_param_entry.get().strip()
+        manual_value = self.repeater_manual_value_entry.get().strip()
 
         # Limpa a aba de resposta
         self.repeater_response_text.delete('1.0', tk.END)
 
-        # Lógica de reenvio
-        if file_path:  # Envio em massa
-            if not param_name:
-                messagebox.showwarning("Aviso", "O 'Parâmetro a Substituir' é obrigatório para envios em massa.")
-                return
-            threads = int(self.sender_threads_spinbox.get())
-            from src.core.sender import run_sender_from_file
-            # Para envios em massa, não exibimos a resposta na aba, pois são muitas
-            thread = threading.Thread(target=run_sender_from_file, args=(raw_request, file_path, param_name, threads, None), daemon=True)
-            thread.start()
-            messagebox.showinfo("Iniciado", "Envio em massa iniciado. Acompanhe os logs para detalhes.")
+        # Envio único (manual ou sem modificação)
+        from src.core.sender import send_from_raw
 
-        else:  # Envio único (manual ou sem modificação)
-            from src.core.sender import send_from_raw
+        def repeater_thread():
+            response = send_from_raw(raw_request, param_name if manual_value else None, manual_value)
+            self.root.after(0, self._display_repeater_response, response)
 
-            def sender_thread():
-                # Se não houver valor manual, param_name é ignorado
-                response = send_from_raw(raw_request, param_name if manual_value else None, manual_value)
-                self.root.after(0, self._display_repeater_response, response)
+        thread = threading.Thread(target=repeater_thread, daemon=True)
+        thread.start()
 
-            thread = threading.Thread(target=sender_thread, daemon=True)
-            thread.start()
+    def start_sender(self):
+        """Inicia o processo de envio em massa a partir da aba Sender."""
+        raw_request = self.sender_request_text.get("1.0", tk.END).strip()
+        if not raw_request:
+            messagebox.showwarning("Aviso", "A 'Request Base' está vazia.")
+            return
+
+        param_name = self.sender_param_entry.get().strip()
+        if not param_name:
+            messagebox.showwarning("Aviso", "O 'Parâmetro a Substituir' é obrigatório.")
+            return
+
+        file_path = self.sender_file_path.get().strip()
+        if not file_path:
+            messagebox.showwarning("Aviso", "Selecione um arquivo de valores.")
+            return
+
+        threads = int(self.sender_threads_spinbox.get())
+        from src.core.sender import run_sender_from_file
+
+        # Limpa a tabela de resultados
+        self.clear_sender_results()
+
+        # Inicia o envio em uma thread separada
+        thread = threading.Thread(
+            target=run_sender_from_file,
+            args=(raw_request, file_path, param_name, threads, self.update_sender_results),
+            daemon=True
+        )
+        thread.start()
+        messagebox.showinfo("Iniciado", "Envio em massa iniciado. Acompanhe a tabela de resultados.")
+
+    def update_sender_results(self, result, progress):
+        """
+        Atualiza a tabela de resultados e a barra de progresso de forma thread-safe.
+        Esta função é chamada como callback a partir do sender.
+        """
+        def _update():
+            # Insere o resultado na tabela
+            status = result.get('status', 'Erro')
+            outcome = result.get('outcome', 'Falha')
+            tag = 'success' if outcome == 'Sucesso' else 'failure'
+            self.sender_results_tree.insert(
+                '', 'end',
+                values=(result.get('url', ''), status, outcome),
+                tags=(tag,)
+            )
+            # Atualiza a barra de progresso
+            self.sender_progress['value'] = progress
+
+        # Garante que a atualização da UI ocorra na thread principal
+        self.root.after(0, _update)
 
     def _display_repeater_response(self, response):
         """Exibe o conteúdo da resposta na aba 'Response' do repetidor."""
@@ -718,6 +780,10 @@ class ProxyGUI:
             label="Enviar para Repetição",
             command=lambda: self.send_to_repeater(selected_entry)
         )
+        context_menu.add_command(
+            label="Enviar para o Sender",
+            command=lambda: self.send_to_sender(selected_entry)
+        )
 
         # Exibe o menu na posição do cursor
         context_menu.tk_popup(event.x_root, event.y_root)
@@ -727,6 +793,12 @@ class ProxyGUI:
         self.repeater_request_data = entry
         self.notebook.select(2)  # Muda para a aba de Repetição
         self._populate_repeater_request_tab()
+
+    def send_to_sender(self, entry):
+        """Copia todos os dados da requisição para a aba do Sender e preenche a UI."""
+        self.sender_request_data = entry
+        self.notebook.select(3)  # Muda para a aba do Sender
+        self._populate_sender_request_tab()
 
     def _populate_repeater_request_tab(self):
         """Preenche a aba 'Request' do repetidor com os dados da requisição armazenada."""
@@ -750,6 +822,26 @@ class ProxyGUI:
 
         # Limpa a área de response
         self.repeater_response_text.delete('1.0', tk.END)
+
+    def _populate_sender_request_tab(self):
+        """Preenche a aba 'Request' do sender com os dados da requisição armazenada."""
+        if not self.sender_request_data:
+            return
+
+        entry = self.sender_request_data
+
+        # Formata o texto da requisição
+        request_info = f"{entry['method']} {entry['path']} HTTP/1.1\n"
+        request_info += f"Host: {entry['host']}\n"
+        for key, value in entry['request_headers'].items():
+            request_info += f"{key}: {value}\n"
+
+        if entry['request_body']:
+            request_info += f"\n{entry['request_body']}"
+
+        # Preenche a área de texto
+        self.sender_request_text.delete('1.0', tk.END)
+        self.sender_request_text.insert('1.0', request_info)
 
     def run(self):
         """Inicia a aplicação"""
