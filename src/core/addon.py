@@ -2,6 +2,7 @@ from mitmproxy import http
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from .config import InterceptConfig
+from .cookie_manager import CookieManager
 from .history import RequestHistory
 from .logger_config import log
 
@@ -9,9 +10,10 @@ from .logger_config import log
 class InterceptAddon:
     """Addon do mitmproxy para interceptar e modificar requisições"""
 
-    def __init__(self, config: InterceptConfig, history: RequestHistory = None):
+    def __init__(self, config: InterceptConfig, history: RequestHistory = None, cookie_manager: CookieManager = None):
         self.config = config
         self.history = history
+        self.cookie_manager = cookie_manager
 
     @staticmethod
     def _split_host_and_path(raw_host: str):
@@ -86,5 +88,14 @@ class InterceptAddon:
 
     def response(self, flow: http.HTTPFlow) -> None:
         """Intercepta respostas HTTP e armazena no histórico"""
+        # Armazena a requisição no histórico
         if self.history is not None:
             self.history.add_request(flow)
+
+        # Processa e armazena os cookies
+        if self.cookie_manager is not None and flow.response:
+            self.cookie_manager.parse_and_store_cookies(
+                host=flow.request.pretty_host,
+                request_headers=dict(flow.request.headers),
+                response_headers=dict(flow.response.headers)
+            )
