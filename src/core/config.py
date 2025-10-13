@@ -35,16 +35,26 @@ class InterceptConfig:
             return False
 
     def add_rule(self, host, path, param_name, param_value):
-        """Adiciona uma regra de interceptação"""
+        """Adiciona uma regra de interceptação com validação."""
+        # Validação
+        if not all(str(val).strip() for val in [host, path, param_name, param_value]):
+            return False, "Todos os campos devem ser preenchidos."
+
         rule = {
-            'host': host,
-            'path': path,
-            'param_name': param_name,
-            'param_value': param_value,
+            'host': str(host).strip(),
+            'path': str(path).strip(),
+            'param_name': str(param_name).strip(),
+            'param_value': str(param_value).strip(),
             'enabled': True
         }
         self.rules.append(rule)
-        return self.save_config()
+
+        if self.save_config():
+            return True, "Regra adicionada com sucesso!"
+        else:
+            # Em caso de falha ao salvar, remove a regra que foi adicionada
+            self.rules.pop()
+            return False, "Erro ao salvar a configuração."
 
     def remove_rule(self, index):
         """Remove uma regra de interceptação"""
