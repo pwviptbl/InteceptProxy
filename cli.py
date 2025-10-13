@@ -52,10 +52,12 @@ def list_rules():
 def add_rule(host, path, param_name, param_value):
     """Adiciona uma nova regra de interceptação."""
     config = InterceptConfig()
-    if config.add_rule(host, path, param_name, param_value):
-        click.echo(click.style("✓ Regra adicionada com sucesso!", fg="green"))
+    success, message = config.add_rule(host, path, param_name, param_value)
+
+    if success:
+        click.echo(click.style(f"✓ {message}", fg="green"))
     else:
-        click.echo(click.style("✗ Erro ao adicionar regra.", fg="red"))
+        click.echo(click.style(f"✗ {message}", fg="red"))
 
 
 @cli.command('remove')

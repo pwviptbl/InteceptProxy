@@ -254,21 +254,19 @@ class ProxyGUI:
         self.response_text.pack(fill="both", expand=True)
 
     def add_rule(self):
-        """Adiciona uma nova regra"""
-        host = self.host_entry.get().strip()
-        path = self.path_entry.get().strip()
-        param_name = self.param_name_entry.get().strip()
-        param_value = self.param_value_entry.get().strip()
+        """Adiciona uma nova regra usando a lógica de validação centralizada."""
+        host = self.host_entry.get()
+        path = self.path_entry.get()
+        param_name = self.param_name_entry.get()
+        param_value = self.param_value_entry.get()
 
-        if not all([host, path, param_name, param_value]):
-            messagebox.showwarning("Aviso", "Todos os campos devem ser preenchidos!")
-            return
+        success, message = self.config.add_rule(host, path, param_name, param_value)
 
-        if self.config.add_rule(host, path, param_name, param_value):
-            messagebox.showinfo("Sucesso", "Regra adicionada com sucesso!")
+        if success:
+            messagebox.showinfo("Sucesso", message)
             self.refresh_rules_list()
         else:
-            messagebox.showerror("Erro", "Erro ao salvar regra!")
+            messagebox.showwarning("Erro de Validação", message)
 
     def remove_rule(self):
         """Remove a regra selecionada"""
