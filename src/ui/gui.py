@@ -1,4 +1,5 @@
 import asyncio
+import queue
 import re
 import threading
 import tkinter as tk
@@ -55,6 +56,9 @@ class ProxyGUI:
 
         self.stop_button = ttk.Button(control_frame, text="Parar Proxy", command=self.stop_proxy, state="disabled")
         self.stop_button.pack(side="left", padx=5)
+
+        self.pause_button = ttk.Button(control_frame, text="Pausar", command=self.toggle_pause_proxy, state="disabled")
+        self.pause_button.pack(side="left", padx=5)
 
         ttk.Label(control_frame, text="Porta: 8080").pack(side="left", padx=5)
 
@@ -385,6 +389,7 @@ class ProxyGUI:
         self.status_label.config(text="Status: Executando", foreground="green")
         self.start_button.config(state="disabled")
         self.stop_button.config(state="normal")
+        self.pause_button.config(state="normal")
 
         messagebox.showinfo("Proxy Iniciado",
                             "Proxy iniciado na porta 8080\n\n"
@@ -416,6 +421,23 @@ class ProxyGUI:
         self.status_label.config(text="Status: Parado", foreground="red")
         self.start_button.config(state="normal")
         self.stop_button.config(state="disabled")
+        self.pause_button.config(state="disabled", text="Pausar")
+
+    def toggle_pause_proxy(self):
+        """Alterna o estado de pausa do proxy e atualiza a UI."""
+        if not self.proxy_running:
+            return
+
+        is_paused = self.config.toggle_pause()
+
+        if is_paused:
+            self.status_label.config(text="Status: Pausado", foreground="orange")
+            self.pause_button.config(text="Continuar")
+            log.info("Proxy pausado.")
+        else:
+            self.status_label.config(text="Status: Executando", foreground="green")
+            self.pause_button.config(text="Pausar")
+            log.info("Proxy retomado.")
 
     def update_history_list(self):
         """Atualiza a lista de histórico adicionando apenas novas entradas."""
@@ -536,6 +558,12 @@ class ProxyGUI:
         file_button.grid(row=1, column=3, sticky="w", padx=5, pady=5)
         Tooltip(file_button, "Use para envios em massa. Um valor por linha.")
 
+        # Valor Manual
+        ttk.Label(sender_frame, text="Valor Manual:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        self.sender_manual_value_entry = ttk.Entry(sender_frame, width=30)
+        self.sender_manual_value_entry.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+        Tooltip(self.sender_manual_value_entry, "Um valor único para ser usado na substituição do parâmetro.")
+
         # Número de Threads
         ttk.Label(config_frame, text="Threads:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
         self.sender_threads_spinbox = ttk.Spinbox(config_frame, from_=1, to=100, width=10)
@@ -563,6 +591,52 @@ class ProxyGUI:
         paned.add(response_frame, weight=1)
         self.repeater_response_text = scrolledtext.ScrolledText(response_frame, wrap=tk.WORD, height=10)
         self.repeater_response_text.pack(fill="both", expand=True)
+
+        # --- Feedback Visual ---
+        feedback_frame = ttk.Frame(sender_tab)
+        feedback_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Barra de Progresso
+        self.sender_progress = ttk.Progressbar(feedback_frame, orient="horizontal", length=100, mode="determinate")
+        self.sender_progress.pack(fill="x", pady=5)
+
+        # Frame de Resultados
+        results_frame = ttk.LabelFrame(feedback_frame, text="Resultados do Envio", padding=10)
+        results_frame.pack(fill="both", expand=True, pady=10)
+
+        # Tabela (Treeview) de Resultados
+        columns = ('URL', 'Status', 'Resultado')
+        self.sender_results_tree = ttk.Treeview(results_frame, columns=columns, show='headings', height=8)
+
+        self.sender_results_tree.heading('URL', text='URL')
+        self.sender_results_tree.heading('Status', text='Status')
+        self.sender_results_tree.heading('Resultado', text='Resultado')
+
+        self.sender_results_tree.column('URL', width=400)
+        self.sender_results_tree.column('Status', width=100, anchor="center")
+        self.sender_results_tree.column('Resultado', width=100, anchor="center")
+
+        # Configuração de tags para cores
+        self.sender_results_tree.tag_configure('success', foreground='green')
+        self.sender_results_tree.tag_configure('failure', foreground='red')
+
+        self.sender_results_tree.pack(side="left", fill="both", expand=True)
+
+        # Scrollbar para a tabela
+        results_scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=self.sender_results_tree.yview)
+        results_scrollbar.pack(side="right", fill="y")
+        self.sender_results_tree.configure(yscrollcommand=results_scrollbar.set)
+
+        # Botão para Limpar Resultados
+        clear_results_button = ttk.Button(feedback_frame, text="Limpar Resultados", command=self.clear_sender_results)
+        clear_results_button.pack(pady=5)
+        Tooltip(clear_results_button, "Limpa a tabela de resultados do envio.")
+
+    def clear_sender_results(self):
+        """Limpa a tabela de resultados da aba de repetição."""
+        for item in self.sender_results_tree.get_children():
+            self.sender_results_tree.delete(item)
+        self.sender_progress['value'] = 0
 
     def select_sender_file(self):
         """Abre uma caixa de diálogo para selecionar o arquivo de valores."""

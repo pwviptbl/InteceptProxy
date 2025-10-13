@@ -25,6 +25,7 @@ def send_from_raw(raw_request: str, param_name: str = None, new_value: str = Non
     Parses a raw HTTP request, optionally substitutes a parameter,
     and resends it, returning the response object.
     """
+    full_url = ""
     try:
         # Separate the request into head and body
         head, body = raw_request.strip().split('\n\n', 1) if '\n\n' in raw_request else (raw_request.strip(), "")

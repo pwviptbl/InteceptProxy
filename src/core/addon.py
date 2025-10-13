@@ -38,6 +38,10 @@ class InterceptAddon:
 
     def request(self, flow: http.HTTPFlow) -> None:
         """Intercepta requisições HTTP"""
+        # Se o proxy estiver pausado, ignora todas as regras e o histórico
+        if self.config.is_paused():
+            return
+
         request = flow.request
 
         for rule in self.config.get_rules():
