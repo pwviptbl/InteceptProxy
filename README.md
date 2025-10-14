@@ -14,10 +14,11 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
 - ✅ Ativar/desativar regras individualmente
 - ✅ Persistência de configurações em JSON
 - ✅ Servidor proxy HTTP na porta 8080
-- ✅ **NOVO:** Histórico de requisições com filtros avançados
-- ✅ **NOVO:** Visualização detalhada de Request/Response
-- ✅ **NOVO:** Filtros por método HTTP e regex de domínio
-- ✅ **NOVO:** Interface de Linha de Comando (CLI) para gerenciamento de regras e execução headless
+- ✅ **NOVO:** Intercept Manual (Forward/Drop) - Funcionalidade inspirada no Burp Suite
+- ✅ Histórico de requisições com filtros avançados
+- ✅ Visualização detalhada de Request/Response
+- ✅ Filtros por método HTTP e regex de domínio
+- ✅ Interface de Linha de Comando (CLI) para gerenciamento de regras e execução headless
 
 ## Instalação
 
@@ -97,6 +98,34 @@ Na aba **"Histórico de Requisições"**:
    - Aba "Response": Status, headers e body da resposta
 
 Para mais informações sobre o histórico, veja [HISTORY_GUIDE.md](HISTORY_GUIDE.md)
+
+### 3.1. Intercept Manual (Forward/Drop)
+
+Na aba **"Intercept Manual"**, você pode pausar requisições e modificá-las manualmente antes de enviá-las:
+
+1. **Ativar Intercept**: 
+   - Clique no botão "Intercept is OFF" para ativar
+   - O botão ficará verde: "Intercept is ON"
+   
+2. **Interceptar Requisição**:
+   - Quando uma requisição for feita, ela aparecerá na aba
+   - Você verá: Método, URL, Headers e Body
+   
+3. **Modificar Requisição**:
+   - Edite os headers no campo "Headers"
+   - Edite o body no campo "Body"
+   
+4. **Tomar Ação**:
+   - **Forward**: Envia a requisição (com suas modificações)
+   - **Drop**: Cancela a requisição (não envia ao servidor)
+
+5. **Desativar Intercept**:
+   - Clique em "Intercept is ON" para desativar
+   - As requisições voltarão a passar normalmente
+
+> 💡 **Dica**: Esta funcionalidade é inspirada no Burp Suite e é ideal para testes manuais de segurança e análise de requisições.
+
+Para mais informações sobre o Intercept Manual, veja [INTERCEPT_MANUAL_FEATURE.md](INTERCEPT_MANUAL_FEATURE.md)
 
 ### 4. Iniciar o Proxy
 
