@@ -104,7 +104,7 @@ Na aba **"Histórico de Requisições"**:
    - Aba "Request": Headers e body da requisição
    - Aba "Response": Status, headers e body da resposta
 
-Para mais informações sobre o histórico, veja [HISTORY_GUIDE.md](HISTORY_GUIDE.md)
+Para mais informações sobre o histórico, veja [docs/HISTORY_GUIDE.md](docs/HISTORY_GUIDE.md)
 
 ### 3.1. Intercept Manual (Forward/Drop)
 
@@ -132,7 +132,7 @@ Na aba **"Intercept Manual"**, você pode pausar requisições e modificá-las m
 
 > 💡 **Dica**: Esta funcionalidade é inspirada no Burp Suite e é ideal para testes manuais de segurança e análise de requisições.
 
-Para mais informações sobre o Intercept Manual, veja [INTERCEPT_MANUAL_FEATURE.md](INTERCEPT_MANUAL_FEATURE.md)
+Para mais informações sobre o Intercept Manual, veja [docs/INTERCEPT_MANUAL_FEATURE.md](docs/INTERCEPT_MANUAL_FEATURE.md)
 
 ### 4. Iniciar o Proxy
 
