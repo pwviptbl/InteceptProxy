@@ -96,6 +96,9 @@ class ProxyGUI:
         # Tab 7: Cookie Jar
         self.setup_cookie_jar_tab()
 
+        # Tab 8: Scanner de Vulnerabilidades
+        self.setup_scanner_tab()
+
     def setup_rules_tab(self):
         """Configura a aba de regras"""
         rules_tab = ttk.Frame(self.notebook)
@@ -566,6 +569,8 @@ class ProxyGUI:
         new_entries = self.history.get_new_entries(self.last_history_id)
         if new_entries:
             self._add_new_history_entries(new_entries)
+            # Atualiza também a lista de vulnerabilidades
+            self._update_scanner_list()
         self.root.after(1000, self.update_history_list)
 
     def _add_new_history_entries(self, entries):
@@ -1277,6 +1282,191 @@ class ProxyGUI:
         self.intercept_body_text.delete('1.0', tk.END)
         self.forward_button.config(state="disabled")
         self.drop_button.config(state="disabled")
+
+    def setup_scanner_tab(self):
+        """Configura a aba de Scanner de Vulnerabilidades"""
+        scanner_frame = ttk.Frame(self.notebook)
+        self.notebook.add(scanner_frame, text="Scanner 🔐")
+
+        # Frame superior com informações
+        info_frame = ttk.LabelFrame(scanner_frame, text="Scanner de Vulnerabilidades", padding=10)
+        info_frame.pack(fill="x", padx=10, pady=5)
+
+        info_text = "O scanner detecta automaticamente vulnerabilidades em requisições/respostas:\n"
+        info_text += "• SQL Injection\n"
+        info_text += "• XSS (Cross-Site Scripting)\n"
+        info_text += "• CSRF (Cross-Site Request Forgery)\n"
+        info_text += "• Path Traversal\n"
+        info_text += "• CVEs conhecidas\n"
+        info_text += "• Informações sensíveis expostas"
+        
+        ttk.Label(info_frame, text=info_text, justify="left").pack(anchor="w")
+
+        # Filtros
+        filter_frame = ttk.LabelFrame(scanner_frame, text="Filtros", padding=10)
+        filter_frame.pack(fill="x", padx=10, pady=5)
+
+        ttk.Label(filter_frame, text="Severidade:").pack(side="left", padx=5)
+        self.scanner_severity_var = tk.StringVar(value="Todas")
+        severity_combo = ttk.Combobox(filter_frame, textvariable=self.scanner_severity_var, 
+                                      values=["Todas", "Critical", "High", "Medium", "Low"], 
+                                      state="readonly", width=15)
+        severity_combo.pack(side="left", padx=5)
+
+        ttk.Label(filter_frame, text="Tipo:").pack(side="left", padx=5)
+        self.scanner_type_var = tk.StringVar(value="Todos")
+        type_combo = ttk.Combobox(filter_frame, textvariable=self.scanner_type_var,
+                                  values=["Todos", "SQL Injection", "XSS (Cross-Site Scripting)", 
+                                         "CSRF (Cross-Site Request Forgery)", "Path Traversal",
+                                         "CVE / Vulnerabilidade Conhecida", "Informação Sensível Exposta"],
+                                  state="readonly", width=30)
+        type_combo.pack(side="left", padx=5)
+
+        ttk.Button(filter_frame, text="Filtrar", command=self.filter_vulnerabilities).pack(side="left", padx=5)
+        ttk.Button(filter_frame, text="Limpar", command=self.clear_vulnerability_filters).pack(side="left", padx=5)
+
+        # Frame de lista de vulnerabilidades
+        list_frame = ttk.LabelFrame(scanner_frame, text="Vulnerabilidades Detectadas", padding=10)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Treeview para vulnerabilidades
+        columns = ("ID", "Severidade", "Tipo", "URL", "Método")
+        self.scanner_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=8)
+        
+        self.scanner_tree.heading("ID", text="ID")
+        self.scanner_tree.heading("Severidade", text="Severidade")
+        self.scanner_tree.heading("Tipo", text="Tipo")
+        self.scanner_tree.heading("URL", text="URL")
+        self.scanner_tree.heading("Método", text="Método")
+
+        self.scanner_tree.column("ID", width=50)
+        self.scanner_tree.column("Severidade", width=100)
+        self.scanner_tree.column("Tipo", width=250)
+        self.scanner_tree.column("URL", width=400)
+        self.scanner_tree.column("Método", width=80)
+
+        # Scrollbar
+        scanner_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.scanner_tree.yview)
+        self.scanner_tree.configure(yscrollcommand=scanner_scrollbar.set)
+        
+        self.scanner_tree.pack(side="left", fill="both", expand=True)
+        scanner_scrollbar.pack(side="right", fill="y")
+
+        # Frame de detalhes da vulnerabilidade
+        detail_frame = ttk.LabelFrame(scanner_frame, text="Detalhes da Vulnerabilidade", padding=10)
+        detail_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self.scanner_detail_text = scrolledtext.ScrolledText(detail_frame, wrap=tk.WORD, height=10)
+        self.scanner_detail_text.pack(fill="both", expand=True)
+
+        # Bind evento de seleção
+        self.scanner_tree.bind("<<TreeviewSelect>>", self.show_vulnerability_details)
+
+        # Contador de vulnerabilidades
+        self.scanner_count_label = ttk.Label(scanner_frame, text="Total: 0 vulnerabilidades")
+        self.scanner_count_label.pack(pady=5)
+
+    def filter_vulnerabilities(self):
+        """Filtra vulnerabilidades baseado nos critérios selecionados"""
+        self._update_scanner_list()
+
+    def clear_vulnerability_filters(self):
+        """Limpa os filtros de vulnerabilidades"""
+        self.scanner_severity_var.set("Todas")
+        self.scanner_type_var.set("Todos")
+        self._update_scanner_list()
+
+    def show_vulnerability_details(self, event):
+        """Mostra detalhes da vulnerabilidade selecionada"""
+        selection = self.scanner_tree.selection()
+        if not selection:
+            return
+
+        item = self.scanner_tree.item(selection[0])
+        vuln_id = item['values'][0]
+
+        # Busca a vulnerabilidade no histórico
+        for entry in self.history.get_history():
+            if entry.get('vulnerabilities'):
+                for i, vuln in enumerate(entry['vulnerabilities'], 1):
+                    unique_id = f"{entry['id']}-{i}"
+                    if unique_id == str(vuln_id):
+                        # Exibe detalhes
+                        self.scanner_detail_text.delete('1.0', tk.END)
+                        
+                        details = f"VULNERABILIDADE DETECTADA\n"
+                        details += f"{'='*80}\n\n"
+                        details += f"Tipo: {vuln['type']}\n"
+                        details += f"Severidade: {vuln['severity']}\n"
+                        details += f"URL: {vuln.get('url', 'N/A')}\n"
+                        details += f"Método: {vuln.get('method', 'N/A')}\n\n"
+                        details += f"Descrição:\n{vuln['description']}\n\n"
+                        details += f"Evidência:\n{vuln.get('evidence', 'N/A')}\n\n"
+                        details += f"{'='*80}\n\n"
+                        details += f"Requisição Original:\n"
+                        details += f"ID: {entry['id']}\n"
+                        details += f"Timestamp: {entry['timestamp']}\n"
+                        details += f"Host: {entry['host']}\n"
+                        details += f"Path: {entry['path']}\n"
+                        details += f"Status: {entry['status']}\n"
+                        
+                        self.scanner_detail_text.insert('1.0', details)
+                        return
+
+    def _update_scanner_list(self):
+        """Atualiza a lista de vulnerabilidades na UI"""
+        # Limpa a árvore
+        for item in self.scanner_tree.get_children():
+            self.scanner_tree.delete(item)
+
+        severity_filter = self.scanner_severity_var.get()
+        type_filter = self.scanner_type_var.get()
+        
+        vuln_count = 0
+        
+        # Coleta todas as vulnerabilidades do histórico
+        for entry in self.history.get_history():
+            if entry.get('vulnerabilities'):
+                for i, vuln in enumerate(entry['vulnerabilities'], 1):
+                    # Aplica filtros
+                    if severity_filter != "Todas" and vuln['severity'] != severity_filter:
+                        continue
+                    if type_filter != "Todos" and vuln['type'] != type_filter:
+                        continue
+                    
+                    vuln_count += 1
+                    unique_id = f"{entry['id']}-{i}"
+                    
+                    # Define cor baseada na severidade
+                    tag = ""
+                    if vuln['severity'] == 'Critical':
+                        tag = "critical"
+                    elif vuln['severity'] == 'High':
+                        tag = "high"
+                    elif vuln['severity'] == 'Medium':
+                        tag = "medium"
+                    else:
+                        tag = "low"
+                    
+                    # Trunca a URL se for muito longa
+                    url = vuln.get('url', 'N/A')
+                    if len(url) > 60:
+                        url = url[:57] + "..."
+                    
+                    self.scanner_tree.insert("", "end", 
+                                           values=(unique_id, vuln['severity'], vuln['type'], 
+                                                  url, vuln.get('method', 'N/A')),
+                                           tags=(tag,))
+        
+        # Configura cores para as tags
+        self.scanner_tree.tag_configure("critical", foreground="red", font=('TkDefaultFont', 9, 'bold'))
+        self.scanner_tree.tag_configure("high", foreground="orange", font=('TkDefaultFont', 9, 'bold'))
+        self.scanner_tree.tag_configure("medium", foreground="#DAA520")
+        self.scanner_tree.tag_configure("low", foreground="gray")
+        
+        # Atualiza contador
+        self.scanner_count_label.config(text=f"Total: {vuln_count} vulnerabilidade(s)")
+
 
     def run(self):
         """Inicia a aplicação"""
