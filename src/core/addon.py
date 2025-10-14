@@ -44,6 +44,49 @@ class InterceptAddon:
         if self.config.is_paused():
             return
 
+        # Se a interceptação manual está ativada, pausa a requisição
+        if self.config.is_intercept_enabled():
+            # Prepara os dados da requisição para a fila
+            flow_data = {
+                'flow': flow,
+                'method': flow.request.method,
+                'url': flow.request.pretty_url,
+                'headers': dict(flow.request.headers),
+                'body': flow.request.content.decode('utf-8', errors='ignore') if flow.request.content else '',
+                'host': flow.request.pretty_host,
+                'path': flow.request.path,
+            }
+            
+            # Adiciona à fila de interceptação
+            self.config.add_to_intercept_queue(flow_data)
+            log.info(f"Requisição interceptada: {flow.request.method} {flow.request.pretty_url}")
+            
+            # Aguarda decisão do usuário (Forward ou Drop)
+            response = self.config.get_intercept_response(timeout=300)  # 5 minutos de timeout
+            
+            if response is None:
+                # Timeout - cancela a requisição
+                log.warning(f"Timeout na interceptação: {flow.request.pretty_url}")
+                flow.kill()
+                return
+            
+            if response['action'] == 'drop':
+                # Usuário escolheu cancelar a requisição
+                log.info(f"Requisição cancelada pelo usuário: {flow.request.pretty_url}")
+                flow.kill()
+                return
+            
+            if response['action'] == 'forward':
+                # Usuário escolheu enviar a requisição (possivelmente modificada)
+                if 'modified_body' in response:
+                    flow.request.content = response['modified_body'].encode('utf-8')
+                if 'modified_headers' in response:
+                    flow.request.headers.clear()
+                    for key, value in response['modified_headers'].items():
+                        flow.request.headers[key] = value
+                log.info(f"Requisição enviada pelo usuário: {flow.request.pretty_url}")
+                # Continua o processamento normal
+
         request = flow.request
 
         for rule in self.config.get_rules():

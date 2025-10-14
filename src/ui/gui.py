@@ -34,6 +34,8 @@ class ProxyGUI:
         self.history_map = {}
         self.last_history_id = 0
         self.repeater_request_data = None
+        self.current_intercept_request = None
+        self.intercept_response_text = None
 
         # Janela principal com tema
         self.root = ThemedTk(theme="arc")
@@ -45,6 +47,9 @@ class ProxyGUI:
 
         # Atualiza o histórico periodicamente
         self.update_history_list()
+        
+        # Atualiza a fila de interceptação periodicamente
+        self.check_intercept_queue()
 
     def setup_ui(self):
         """Configura a interface gráfica"""
@@ -73,19 +78,22 @@ class ProxyGUI:
         # Tab 1: Configuração de Regras
         self.setup_rules_tab()
 
-        # Tab 2: Histórico de Requisições
+        # Tab 2: Intercept Manual
+        self.setup_intercept_tab()
+
+        # Tab 3: Histórico de Requisições
         self.setup_history_tab()
 
-        # Tab 3: Repetição
+        # Tab 4: Repetição
         self.setup_repeater_tab()
 
-        # Tab 4: Sender
+        # Tab 5: Sender
         self.setup_sender_tab()
 
-        # Tab 5: Decoder
+        # Tab 6: Decoder
         self.setup_decoder_tab()
 
-        # Tab 6: Cookie Jar
+        # Tab 7: Cookie Jar
         self.setup_cookie_jar_tab()
 
     def setup_rules_tab(self):
@@ -180,6 +188,109 @@ class ProxyGUI:
 4. Navegue normalmente - os parâmetros configurados serão substituídos automaticamente"""
 
         ttk.Label(info_frame, text=info_text, justify="left").pack()
+
+    def setup_intercept_tab(self):
+        """Configura a aba de interceptação manual"""
+        intercept_tab = ttk.Frame(self.notebook)
+        self.notebook.add(intercept_tab, text="Intercept Manual")
+
+        # Frame de controle superior
+        control_frame = ttk.LabelFrame(intercept_tab, text="Controle de Interceptação", padding=10)
+        control_frame.pack(fill="x", padx=10, pady=5)
+
+        # Status da interceptação
+        self.intercept_status_label = ttk.Label(control_frame, text="Intercept: OFF", foreground="red", font=("Arial", 12, "bold"))
+        self.intercept_status_label.pack(side="left", padx=10)
+
+        # Botão ON/OFF
+        self.intercept_toggle_button = ttk.Button(
+            control_frame, 
+            text="Intercept is OFF", 
+            command=self.toggle_intercept,
+            width=20
+        )
+        self.intercept_toggle_button.pack(side="left", padx=10)
+
+        # Frame da requisição interceptada
+        request_frame = ttk.LabelFrame(intercept_tab, text="Requisição Interceptada", padding=10)
+        request_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Frame de informações básicas
+        info_frame = ttk.Frame(request_frame)
+        info_frame.pack(fill="x", padx=5, pady=5)
+
+        ttk.Label(info_frame, text="Método:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.intercept_method_label = ttk.Label(info_frame, text="-")
+        self.intercept_method_label.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+
+        ttk.Label(info_frame, text="URL:", font=("Arial", 9, "bold")).grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.intercept_url_label = ttk.Label(info_frame, text="-", wraplength=700)
+        self.intercept_url_label.grid(row=1, column=1, sticky="w", padx=5, pady=2)
+
+        ttk.Label(info_frame, text="Host:", font=("Arial", 9, "bold")).grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        self.intercept_host_label = ttk.Label(info_frame, text="-")
+        self.intercept_host_label.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+
+        # Frame de headers (editável)
+        headers_frame = ttk.LabelFrame(request_frame, text="Headers", padding=5)
+        headers_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+        self.intercept_headers_text = scrolledtext.ScrolledText(headers_frame, height=8, wrap=tk.WORD)
+        self.intercept_headers_text.pack(fill="both", expand=True)
+
+        # Frame de body (editável)
+        body_frame = ttk.LabelFrame(request_frame, text="Body", padding=5)
+        body_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+        self.intercept_body_text = scrolledtext.ScrolledText(body_frame, height=8, wrap=tk.WORD)
+        self.intercept_body_text.pack(fill="both", expand=True)
+
+        # Frame de botões de ação
+        action_frame = ttk.Frame(intercept_tab)
+        action_frame.pack(fill="x", padx=10, pady=10)
+
+        # Botão Forward
+        self.forward_button = ttk.Button(
+            action_frame,
+            text="Forward",
+            command=self.forward_request,
+            state="disabled",
+            width=15
+        )
+        self.forward_button.pack(side="left", padx=10)
+        Tooltip(self.forward_button, "Envia a requisição (com modificações se houver)")
+
+        # Botão Drop
+        self.drop_button = ttk.Button(
+            action_frame,
+            text="Drop",
+            command=self.drop_request,
+            state="disabled",
+            width=15
+        )
+        self.drop_button.pack(side="left", padx=10)
+        Tooltip(self.drop_button, "Cancela a requisição")
+
+        # Label de informação
+        info_label = ttk.Label(
+            action_frame,
+            text="Aguardando requisição...",
+            foreground="gray"
+        )
+        info_label.pack(side="left", padx=20)
+
+        # Frame de instruções
+        instructions_frame = ttk.LabelFrame(intercept_tab, text="Instruções", padding=10)
+        instructions_frame.pack(fill="x", padx=10, pady=5)
+
+        instructions_text = """1. Clique em "Intercept is OFF" para ativar a interceptação manual
+2. Quando uma requisição for interceptada, ela aparecerá aqui
+3. Você pode editar os headers e o body da requisição
+4. Clique em "Forward" para enviar a requisição (com modificações)
+5. Clique em "Drop" para cancelar a requisição
+6. Clique em "Intercept is ON" para desativar a interceptação"""
+
+        ttk.Label(instructions_frame, text=instructions_text, justify="left").pack()
 
     def setup_history_tab(self):
         """Configura a aba de histórico"""
@@ -807,13 +918,13 @@ class ProxyGUI:
     def send_to_repeater(self, entry):
         """Copia todos os dados da requisição para a aba de Repetição e preenche a UI."""
         self.repeater_request_data = entry
-        self.notebook.select(2)  # Muda para a aba de Repetição
+        self.notebook.select(3)  # Muda para a aba de Repetição (agora índice 3)
         self._populate_repeater_request_tab()
 
     def send_to_sender(self, entry):
         """Copia todos os dados da requisição para a aba do Sender e preenche a UI."""
         self.sender_request_data = entry
-        self.notebook.select(3)  # Muda para a aba do Sender
+        self.notebook.select(4)  # Muda para a aba do Sender (agora índice 4)
         self._populate_sender_request_tab()
 
     def _populate_repeater_request_tab(self):
@@ -1057,6 +1168,115 @@ class ProxyGUI:
                    command=lambda: self._handle_decode_action(decoder.url_encode)).grid(row=1, column=0, padx=5, pady=5)
         ttk.Button(buttons_frame, text="URL Decode",
                    command=lambda: self._handle_decode_action(decoder.url_decode)).grid(row=1, column=1, padx=5, pady=5)
+
+    def toggle_intercept(self):
+        """Alterna o estado de interceptação manual."""
+        if not self.proxy_running:
+            messagebox.showinfo("Intercept", "Por favor, inicie o proxy primeiro.")
+            return
+
+        is_enabled = self.config.toggle_intercept()
+
+        if is_enabled:
+            self.intercept_status_label.config(text="Intercept: ON", foreground="green")
+            self.intercept_toggle_button.config(text="Intercept is ON")
+            log.info("Interceptação manual ativada.")
+        else:
+            self.intercept_status_label.config(text="Intercept: OFF", foreground="red")
+            self.intercept_toggle_button.config(text="Intercept is OFF")
+            # Limpa a fila e reseta a UI
+            self.config.clear_intercept_queues()
+            self._reset_intercept_ui()
+            log.info("Interceptação manual desativada.")
+
+    def check_intercept_queue(self):
+        """Verifica a fila de interceptação periodicamente."""
+        if self.config.is_intercept_enabled():
+            request_data = self.config.get_from_intercept_queue(timeout=0.01)
+            if request_data:
+                self._display_intercepted_request(request_data)
+        
+        # Agenda próxima verificação
+        self.root.after(100, self.check_intercept_queue)
+
+    def _display_intercepted_request(self, request_data):
+        """Exibe a requisição interceptada na UI."""
+        self.current_intercept_request = request_data
+
+        # Atualiza labels
+        self.intercept_method_label.config(text=request_data['method'])
+        self.intercept_url_label.config(text=request_data['url'])
+        self.intercept_host_label.config(text=request_data['host'])
+
+        # Atualiza headers
+        self.intercept_headers_text.delete('1.0', tk.END)
+        headers_text = ""
+        for key, value in request_data['headers'].items():
+            headers_text += f"{key}: {value}\n"
+        self.intercept_headers_text.insert('1.0', headers_text)
+
+        # Atualiza body
+        self.intercept_body_text.delete('1.0', tk.END)
+        self.intercept_body_text.insert('1.0', request_data['body'])
+
+        # Habilita botões
+        self.forward_button.config(state="normal")
+        self.drop_button.config(state="normal")
+
+        # Muda para a aba de interceptação
+        self.notebook.select(1)  # Aba Intercept Manual
+
+    def forward_request(self):
+        """Envia a requisição interceptada (com modificações)."""
+        if not self.current_intercept_request:
+            return
+
+        # Lê os dados editados
+        headers_text = self.intercept_headers_text.get('1.0', tk.END).strip()
+        body_text = self.intercept_body_text.get('1.0', tk.END).strip()
+
+        # Parse headers
+        modified_headers = {}
+        for line in headers_text.split('\n'):
+            if ':' in line:
+                key, value = line.split(':', 1)
+                modified_headers[key.strip()] = value.strip()
+
+        # Envia resposta para a fila
+        response_data = {
+            'action': 'forward',
+            'modified_headers': modified_headers,
+            'modified_body': body_text
+        }
+        self.config.add_intercept_response(response_data)
+
+        # Reseta UI
+        self._reset_intercept_ui()
+        log.info(f"Requisição enviada: {self.current_intercept_request['url']}")
+
+    def drop_request(self):
+        """Cancela a requisição interceptada."""
+        if not self.current_intercept_request:
+            return
+
+        # Envia resposta para a fila
+        response_data = {'action': 'drop'}
+        self.config.add_intercept_response(response_data)
+
+        # Reseta UI
+        self._reset_intercept_ui()
+        log.info(f"Requisição cancelada: {self.current_intercept_request['url']}")
+
+    def _reset_intercept_ui(self):
+        """Reseta a UI de interceptação."""
+        self.current_intercept_request = None
+        self.intercept_method_label.config(text="-")
+        self.intercept_url_label.config(text="-")
+        self.intercept_host_label.config(text="-")
+        self.intercept_headers_text.delete('1.0', tk.END)
+        self.intercept_body_text.delete('1.0', tk.END)
+        self.forward_button.config(state="disabled")
+        self.drop_button.config(state="disabled")
 
     def run(self):
         """Inicia a aplicação"""
