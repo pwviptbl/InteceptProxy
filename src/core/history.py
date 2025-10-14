@@ -10,7 +10,7 @@ class RequestHistory:
         self.max_items = 1000
         self.current_id = 0
 
-    def add_request(self, flow: http.HTTPFlow):
+    def add_request(self, flow: http.HTTPFlow, vulnerabilities=None):
         """Adiciona uma requisição ao histórico"""
         request = flow.request
         response = flow.response
@@ -31,6 +31,7 @@ class RequestHistory:
             'request_body': request.content.decode('utf-8', errors='ignore') if request.content else '',
             'response_headers': dict(response.headers) if response else {},
             'response_body': response.content.decode('utf-8', errors='ignore') if response and response.content else '',
+            'vulnerabilities': vulnerabilities or [],  # Adiciona lista de vulnerabilidades
         }
 
         self.history.append(entry)

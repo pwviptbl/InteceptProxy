@@ -5,6 +5,7 @@ from .config import InterceptConfig
 from .cookie_manager import CookieManager
 from .history import RequestHistory
 from .logger_config import log
+from .scanner import VulnerabilityScanner
 
 
 class InterceptAddon:
@@ -14,6 +15,7 @@ class InterceptAddon:
         self.config = config
         self.history = history
         self.cookie_manager = cookie_manager
+        self.scanner = VulnerabilityScanner()  # Inicializa o scanner
 
     @staticmethod
     def _split_host_and_path(raw_host: str):
@@ -131,9 +133,38 @@ class InterceptAddon:
 
     def response(self, flow: http.HTTPFlow) -> None:
         """Intercepta respostas HTTP e armazena no histórico"""
-        # Armazena a requisição no histórico
+        
+        # Escaneia a resposta em busca de vulnerabilidades
+        vulnerabilities = []
+        if self.scanner and flow.response:
+            request_data = {
+                'method': flow.request.method,
+                'url': flow.request.pretty_url,
+                'headers': dict(flow.request.headers),
+                'body': flow.request.content.decode('utf-8', errors='ignore') if flow.request.content else '',
+            }
+            response_data = {
+                'status': flow.response.status_code,
+                'headers': dict(flow.response.headers),
+                'body': flow.response.content.decode('utf-8', errors='ignore') if flow.response.content else '',
+            }
+            
+            vulnerabilities = self.scanner.scan_response(request_data, response_data)
+            
+            # Preenche URL e método nas vulnerabilidades
+            for vuln in vulnerabilities:
+                if not vuln.get('url'):
+                    vuln['url'] = flow.request.pretty_url
+                if not vuln.get('method'):
+                    vuln['method'] = flow.request.method
+            
+            # Log se vulnerabilidades foram encontradas
+            if vulnerabilities:
+                log.warning(f"Vulnerabilidades encontradas em {flow.request.pretty_url}: {len(vulnerabilities)}")
+        
+        # Armazena a requisição no histórico com vulnerabilidades
         if self.history is not None:
-            self.history.add_request(flow)
+            self.history.add_request(flow, vulnerabilities=vulnerabilities)
 
         # Processa e armazena os cookies
         if self.cookie_manager is not None and flow.response:
