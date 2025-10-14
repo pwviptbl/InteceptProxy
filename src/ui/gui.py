@@ -13,6 +13,7 @@ from ttkthemes import ThemedTk
 from src.core import decoder
 from src.core.addon import InterceptAddon
 from src.core.config import InterceptConfig
+from src.core.cookie_manager import CookieManager
 from src.core.history import RequestHistory
 from src.core.logger_config import log
 from .tooltip import Tooltip
@@ -24,6 +25,8 @@ class ProxyGUI:
     def __init__(self):
         self.config = InterceptConfig()
         self.history = RequestHistory()
+        self.cookie_manager = CookieManager()
+        self.cookie_manager.set_ui_callback(self._refresh_cookie_trees)
         self.proxy_thread = None
         self.proxy_running = False
         self.proxy_master = None
@@ -81,6 +84,9 @@ class ProxyGUI:
 
         # Tab 5: Decoder
         self.setup_decoder_tab()
+
+        # Tab 6: Cookie Jar
+        self.setup_cookie_jar_tab()
 
     def setup_rules_tab(self):
         """Configura a aba de regras"""
@@ -361,7 +367,7 @@ class ProxyGUI:
                 try:
                     proxy_options = options.Options(listen_host='127.0.0.1', listen_port=8080)
                     master = DumpMaster(proxy_options, with_termlog=False, with_dumper=False)
-                    master.addons.add(InterceptAddon(self.config, self.history))
+                    master.addons.add(InterceptAddon(self.config, self.history, self.cookie_manager))
                     self.proxy_master = master
                     self.proxy_loop = loop
                     await master.run()
@@ -680,6 +686,9 @@ class ProxyGUI:
             messagebox.showwarning("Aviso", "Não há nenhuma requisição para reenviar.")
             return
 
+        # Injeta os cookies do Jar na requisição
+        raw_request = self._inject_jar_cookies(raw_request)
+
         param_name = self.repeater_param_entry.get().strip()
         manual_value = self.repeater_manual_value_entry.get().strip()
 
@@ -702,6 +711,9 @@ class ProxyGUI:
         if not raw_request:
             messagebox.showwarning("Aviso", "A 'Request Base' está vazia.")
             return
+
+        # Injeta os cookies do Jar na requisição
+        raw_request = self._inject_jar_cookies(raw_request)
 
         param_name = self.sender_param_entry.get().strip()
         if not param_name:
@@ -846,6 +858,149 @@ class ProxyGUI:
         # Preenche a área de texto
         self.sender_request_text.delete('1.0', tk.END)
         self.sender_request_text.insert('1.0', request_info)
+
+    def setup_cookie_jar_tab(self):
+        """Configura a aba do Gerenciador de Cookies (Cookie Jar)."""
+        cookie_tab = ttk.Frame(self.notebook)
+        self.notebook.add(cookie_tab, text="Cookie Jar")
+
+        # PanedWindow para dividir a tela
+        paned = ttk.PanedWindow(cookie_tab, orient=tk.HORIZONTAL)
+        paned.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # --- Frame da Esquerda: Todos os Cookies Capturados ---
+        all_cookies_frame = ttk.LabelFrame(paned, text="Todos os Cookies Capturados", padding=10)
+        paned.add(all_cookies_frame, weight=1)
+
+        # Treeview para todos os cookies
+        self.all_cookies_tree = ttk.Treeview(all_cookies_frame, columns=('Nome', 'Valor'), show='tree headings')
+        self.all_cookies_tree.heading('#0', text='Domínio')
+        self.all_cookies_tree.column('#0', width=150)
+        self.all_cookies_tree.heading('Nome', text='Nome')
+        self.all_cookies_tree.heading('Valor', text='Valor')
+        self.all_cookies_tree.column('Nome', width=150)
+        self.all_cookies_tree.column('Valor', width=250)
+        self.all_cookies_tree.pack(side="left", fill="both", expand=True)
+
+        all_scrollbar = ttk.Scrollbar(all_cookies_frame, orient="vertical", command=self.all_cookies_tree.yview)
+        all_scrollbar.pack(side="right", fill="y")
+        self.all_cookies_tree.configure(yscrollcommand=all_scrollbar.set)
+
+        # --- Frame do Meio: Botões de Ação ---
+        actions_frame = ttk.Frame(paned, padding=10)
+        paned.add(actions_frame, weight=0) # Peso 0 para não expandir
+
+        add_button = ttk.Button(actions_frame, text=">>", width=5, command=self._add_cookie_to_jar)
+        add_button.pack(pady=10)
+        Tooltip(add_button, "Adicionar selecionado ao Cookie Jar")
+
+        remove_button = ttk.Button(actions_frame, text="<<", width=5, command=self._remove_cookie_from_jar)
+        remove_button.pack(pady=10)
+        Tooltip(remove_button, "Remover selecionado do Cookie Jar")
+
+
+        # --- Frame da Direita: Cookie Jar ---
+        jar_frame = ttk.LabelFrame(paned, text="Cookie Jar (Sessão Forçada)", padding=10)
+        paned.add(jar_frame, weight=1)
+
+        # Treeview para o Cookie Jar
+        self.jar_tree = ttk.Treeview(jar_frame, columns=('Nome', 'Valor'), show='headings')
+        self.jar_tree.heading('Nome', text='Nome')
+        self.jar_tree.heading('Valor', text='Valor')
+        self.jar_tree.column('Nome', width=150)
+        self.jar_tree.column('Valor', width=250)
+        self.jar_tree.pack(side="left", fill="both", expand=True)
+
+        jar_scrollbar = ttk.Scrollbar(jar_frame, orient="vertical", command=self.jar_tree.yview)
+        jar_scrollbar.pack(side="right", fill="y")
+        self.jar_tree.configure(yscrollcommand=jar_scrollbar.set)
+
+        # Botão para limpar o Jar
+        clear_jar_button = ttk.Button(jar_frame, text="Limpar Cookie Jar", command=self._clear_cookie_jar)
+        clear_jar_button.pack(side="bottom", fill="x", pady=5)
+        Tooltip(clear_jar_button, "Remove todos os cookies do Jar")
+
+    def _inject_jar_cookies(self, raw_request: str) -> str:
+        """Substitui ou adiciona o cabeçalho de Cookie na requisição com os cookies do Jar."""
+        jar_header = self.cookie_manager.get_jar_cookies_header()
+        if not jar_header:
+            return raw_request  # Retorna a requisição original se o Jar estiver vazio
+
+        cookie_header_line = f"Cookie: {jar_header}"
+
+        # Tenta substituir o cabeçalho de Cookie existente
+        new_request, count = re.sub(
+            r'^Cookie:.*$', cookie_header_line, raw_request, flags=re.IGNORECASE | re.MULTILINE
+        )
+
+        # Se nenhum cabeçalho de Cookie foi substituído, adiciona um novo
+        if count == 0:
+            # Insere o cabeçalho de Cookie após a linha do Host
+            if '\nHost:' in new_request:
+                new_request = re.sub(r'(\nHost:[^\n]*)', r'\1\n' + cookie_header_line, new_request, count=1)
+            else:
+                # Adiciona após a primeira linha (linha de requisição)
+                parts = new_request.split('\n', 1)
+                if len(parts) > 1:
+                    new_request = f"{parts[0]}\n{cookie_header_line}\n{parts[1]}"
+                else:
+                    new_request = f"{parts[0]}\n{cookie_header_line}"
+
+        return new_request
+
+    def _refresh_cookie_trees(self):
+        """Atualiza as árvores de cookies com os dados do CookieManager."""
+        # --- Atualiza a árvore de todos os cookies ---
+        self.all_cookies_tree.delete(*self.all_cookies_tree.get_children())
+        all_cookies = self.cookie_manager.get_all_cookies()
+        # A primeira coluna é a 'text', as outras são 'values'
+        self.all_cookies_tree.column('#0', width=150)
+        self.all_cookies_tree.heading('#0', text='Domínio')
+
+        for domain, cookies in sorted(all_cookies.items()):
+            domain_id = self.all_cookies_tree.insert('', 'end', text=domain, open=True)
+            for name, value in sorted(cookies.items()):
+                self.all_cookies_tree.insert(domain_id, 'end', values=(name, value))
+
+        # --- Atualiza a árvore do Cookie Jar ---
+        self.jar_tree.delete(*self.jar_tree.get_children())
+        jar_cookies = self.cookie_manager.get_jar_cookies_list()
+        for cookie in jar_cookies:
+            self.jar_tree.insert('', 'end', values=(cookie['name'], cookie['value']))
+
+    def _add_cookie_to_jar(self):
+        """Adiciona o cookie selecionado da lista 'Todos' para o 'Jar'."""
+        selection = self.all_cookies_tree.selection()
+        if not selection:
+            return
+
+        item = selection[0]
+        # Garante que estamos pegando um cookie (que tem um pai), não um domínio
+        if self.all_cookies_tree.parent(item):
+            values = self.all_cookies_tree.item(item)['values']
+            if len(values) == 2:
+                name, value = values
+                self.cookie_manager.add_to_jar(name, value)
+                self._refresh_cookie_trees()
+
+    def _remove_cookie_from_jar(self):
+        """Remove o cookie selecionado do 'Jar'."""
+        selection = self.jar_tree.selection()
+        if not selection:
+            return
+
+        item = selection[0]
+        values = self.jar_tree.item(item)['values']
+        if len(values) == 2:
+            name, _ = values
+            self.cookie_manager.remove_from_jar(name)
+            self._refresh_cookie_trees()
+
+    def _clear_cookie_jar(self):
+        """Limpa todos os cookies do 'Jar'."""
+        if messagebox.askyesno("Confirmar", "Deseja realmente limpar todo o Cookie Jar?"):
+            self.cookie_manager.clear_jar()
+            self._refresh_cookie_trees()
 
     def _handle_decode_action(self, action_function):
         """Função auxiliar para executar uma ação de encode/decode."""
