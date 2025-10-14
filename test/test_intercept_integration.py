@@ -3,11 +3,16 @@
 Integration test for intercept manual feature
 Tests the interaction between addon and config
 """
+import os
 import sys
 import threading
 import time
 from unittest.mock import Mock, MagicMock
-from src.core.config import InterceptConfig
+
+# Adiciona o diretório `src` ao path para encontrar os módulos
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+
+from core.config import InterceptConfig
 
 
 def test_intercept_integration():
