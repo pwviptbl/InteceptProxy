@@ -14,7 +14,14 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
 - ✅ Ativar/desativar regras individualmente
 - ✅ Persistência de configurações em JSON
 - ✅ Servidor proxy HTTP na porta 8080
-- ✅ **NOVO:** Intercept Manual (Forward/Drop) - Funcionalidade inspirada no Burp Suite
+- ✅ **Intercept Manual (Forward/Drop)** - Funcionalidade inspirada no Burp Suite
+- ✅ **Scanner de Vulnerabilidades** 🔐 - Detecção automática de:
+  - SQL Injection
+  - XSS (Cross-Site Scripting)
+  - CSRF (Cross-Site Request Forgery)
+  - Path Traversal
+  - CVEs conhecidas
+  - Informações sensíveis expostas
 - ✅ Histórico de requisições com filtros avançados
 - ✅ Visualização detalhada de Request/Response
 - ✅ Filtros por método HTTP e regex de domínio

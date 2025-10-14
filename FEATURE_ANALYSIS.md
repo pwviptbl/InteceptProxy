@@ -193,16 +193,19 @@
 
 ### 🥇 **PRIORIDADE MÁXIMA** (Impacto Alto + Esforço Médio)
 
-#### 1. **Scanner de Vulnerabilidades Básico** ⚠️
+#### 1. **Scanner de Vulnerabilidades Básico** ⚠️ **IMPLEMENTADO**
 **Descrição:** Implementar detecção automática de vulnerabilidades comuns
-- SQL Injection básico (', --, OR 1=1)
-- XSS refletido (payloads básicos de script)
-- Path Traversal (../, /etc/passwd)
-- Open Redirect
-- Detecção de informações sensíveis em respostas
+- SQL Injection básico (', --, OR 1=1) ✅
+- XSS refletido (payloads básicos de script) ✅
+- Path Traversal (../, /etc/passwd) ✅
+- Open Redirect ✅
+- Detecção de informações sensíveis em respostas ✅
+- Detecção de CSRF ✅
+- Detecção de CVEs conhecidas ✅
 
 **Benefício:** Transforma a ferramenta de proxy simples em ferramenta de segurança
 **Esforço:** Médio (pode começar com regras básicas)
+**Status:** ✅ Implementado em src/core/scanner.py com interface na aba Scanner 🔐
 
 #### 2. **Spider/Crawler Básico** 🕷️
 **Descrição:** Descoberta automática de endpoints
@@ -355,8 +358,8 @@
 
 ### Top 5 Funcionalidades Recomendadas (Ordem de Implementação)
 
-1. ✅ **Intercept Manual (Forward/Drop)** - Funcionalidade básica de proxy que está faltando
-2. ✅ **Scanner de Vulnerabilidades Básico** - Adiciona valor de segurança
+1. ✅ **Intercept Manual (Forward/Drop)** - Funcionalidade básica de proxy que está faltando - **IMPLEMENTADO**
+2. ✅ **Scanner de Vulnerabilidades Básico** - Adiciona valor de segurança - **IMPLEMENTADO**
 3. ✅ **Comparador de Requisições** - Útil e relativamente fácil
 4. ✅ **Target Scope** - Organização essencial
 5. ✅ **Spider/Crawler Básico** - Automação de reconhecimento
