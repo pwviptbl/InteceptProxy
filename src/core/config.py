@@ -1,5 +1,7 @@
 import json
 import os
+import queue
+import threading
 
 
 class InterceptConfig:
@@ -9,6 +11,10 @@ class InterceptConfig:
         self.config_file = config_file
         self.rules = []
         self.paused = False
+        self.intercept_enabled = False
+        self.intercept_queue = queue.Queue()
+        self.intercept_response_queue = queue.Queue()
+        self.intercept_lock = threading.Lock()
         self.load_config()
 
     def load_config(self):
@@ -82,3 +88,47 @@ class InterceptConfig:
     def is_paused(self):
         """Verifica se o proxy está pausado."""
         return self.paused
+
+    def toggle_intercept(self):
+        """Alterna o estado de interceptação manual."""
+        self.intercept_enabled = not self.intercept_enabled
+        return self.intercept_enabled
+
+    def is_intercept_enabled(self):
+        """Verifica se a interceptação manual está ativada."""
+        return self.intercept_enabled
+
+    def add_to_intercept_queue(self, flow_data):
+        """Adiciona uma requisição à fila de interceptação."""
+        self.intercept_queue.put(flow_data)
+
+    def get_from_intercept_queue(self, timeout=0.1):
+        """Obtém uma requisição da fila de interceptação."""
+        try:
+            return self.intercept_queue.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def add_intercept_response(self, response_data):
+        """Adiciona uma resposta à fila de respostas."""
+        self.intercept_response_queue.put(response_data)
+
+    def get_intercept_response(self, timeout=10):
+        """Obtém uma resposta da fila de respostas."""
+        try:
+            return self.intercept_response_queue.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def clear_intercept_queues(self):
+        """Limpa todas as filas de interceptação."""
+        while not self.intercept_queue.empty():
+            try:
+                self.intercept_queue.get_nowait()
+            except queue.Empty:
+                break
+        while not self.intercept_response_queue.empty():
+            try:
+                self.intercept_response_queue.get_nowait()
+            except queue.Empty:
+                break
