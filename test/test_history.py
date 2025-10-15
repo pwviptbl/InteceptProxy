@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
-"""
-Test script para verificar a funcionalidade do RequestHistory
-"""
+import unittest
 import os
 import sys
 from unittest.mock import Mock
@@ -13,107 +10,104 @@ from core.history import RequestHistory
 from core.config import InterceptConfig
 from core.addon import InterceptAddon
 
+class TestHistory(unittest.TestCase):
 
-def test_request_history():
-    """Testa a classe RequestHistory"""
-    print("Testando RequestHistory...")
+    def setUp(self):
+        """Configura um mock de flow para ser usado nos testes."""
+        self.mock_flow = Mock()
+        self.mock_flow.request = Mock()
+        self.mock_flow.request.pretty_host = "exemplo.com"
+        self.mock_flow.request.method = "GET"
+        self.mock_flow.request.pretty_url = "http://exemplo.com/test"
+        self.mock_flow.request.path = "/test"
+        self.mock_flow.request.headers = {"User-Agent": "Test"}
+        self.mock_flow.request.content = b"test body"
+        self.mock_flow.request.query = {}
 
-    # Cria instância
-    history = RequestHistory()
-    assert len(history.get_history()) == 0, "História deve começar vazia"
-    print("✓ História inicializada corretamente")
+        self.mock_flow.response = Mock()
+        self.mock_flow.response.status_code = 200
+        self.mock_flow.response.headers = {"Content-Type": "text/html"}
+        self.mock_flow.response.content = b"response body"
 
-    # Simula um flow HTTP
-    mock_flow = Mock()
-    mock_flow.request = Mock()
-    mock_flow.request.pretty_host = "exemplo.com"
-    mock_flow.request.method = "GET"
-    mock_flow.request.pretty_url = "http://exemplo.com/test"
-    mock_flow.request.path = "/test"
-    mock_flow.request.headers = {"User-Agent": "Test"}
-    mock_flow.request.content = b"test body"
+    def test_request_history(self):
+        """Testa a classe RequestHistory."""
+        history = RequestHistory()
+        self.assertEqual(len(history.get_history()), 0, "História deve começar vazia")
 
-    mock_flow.response = Mock()
-    mock_flow.response.status_code = 200
-    mock_flow.response.headers = {"Content-Type": "text/html"}
-    mock_flow.response.content = b"response body"
+        # Adiciona requisição
+        history.add_request(self.mock_flow)
+        self.assertEqual(len(history.get_history()), 1, "Deve ter 1 entrada")
 
-    # Adiciona requisição
-    history.add_request(mock_flow)
-    assert len(history.get_history()) == 1, "Deve ter 1 entrada"
-    print("✓ Requisição adicionada com sucesso")
+        # Verifica conteúdo da entrada
+        entry = history.get_history()[0]
+        self.assertEqual(entry['host'], "exemplo.com")
+        self.assertEqual(entry['method'], "GET")
+        self.assertEqual(entry['status'], 200)
+        self.assertEqual(entry['url'], "http://exemplo.com/test")
 
-    # Verifica conteúdo da entrada
-    entry = history.get_history()[0]
-    assert entry['host'] == "exemplo.com", "Host deve ser exemplo.com"
-    assert entry['method'] == "GET", "Método deve ser GET"
-    assert entry['status'] == 200, "Status deve ser 200"
-    assert entry['url'] == "http://exemplo.com/test", "URL deve corresponder"
-    print("✓ Conteúdo da entrada está correto")
+        # Testa limpeza
+        history.clear_history()
+        self.assertEqual(len(history.get_history()), 0, "História deve estar vazia após limpeza")
 
-    # Testa limpeza
-    history.clear_history()
-    assert len(history.get_history()) == 0, "História deve estar vazia após limpeza"
-    print("✓ Limpeza de histórico funcionando")
+    def test_history_size_limit(self):
+        """Testa o limite de tamanho do histórico."""
+        history = RequestHistory()
+        history.max_items = 5
+        for i in range(10):
+            history.add_request(self.mock_flow)
+        self.assertEqual(len(history.get_history()), 5, "Histórico deve ser limitado a 5 itens")
 
-    # Testa limite de tamanho
-    history.max_items = 5
-    for i in range(10):
-        history.add_request(mock_flow)
-    assert len(history.get_history()) == 5, "Histórico deve ser limitado a 5 itens"
-    print("✓ Limite de tamanho funcionando")
+    def test_intercept_addon_with_history(self):
+        """Testa o InterceptAddon com histórico."""
+        config = InterceptConfig()
+        history = RequestHistory()
+        addon = InterceptAddon(config, history)
 
-    print("\n✅ Todos os testes de histórico passaram!")
-    return True
+        # Processa requisição e resposta
+        addon.request(self.mock_flow)
+        addon.response(self.mock_flow)
+
+        self.assertEqual(len(history.get_history()), 1, "Deve ter 1 entrada no histórico")
+
+    def test_get_entry_by_id(self):
+        """Testa a busca de uma entrada pelo ID."""
+        history = RequestHistory()
+        history.add_request(self.mock_flow) # ID 1
+        history.add_request(self.mock_flow) # ID 2
+
+        entry = history.get_entry_by_id(2)
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry['id'], 2)
+
+        entry_none = history.get_entry_by_id(99)
+        self.assertIsNone(entry_none)
+
+    def test_add_vulnerabilities_to_entry(self):
+        """Testa a adição de vulnerabilidades a uma entrada existente."""
+        history = RequestHistory()
+        history.add_request(self.mock_flow) # ID 1
+
+        vuln1 = {'type': 'SQLi', 'severity': 'High'}
+        vuln2 = {'type': 'XSS', 'severity': 'Medium'}
+
+        success = history.add_vulnerabilities_to_entry(1, [vuln1])
+        self.assertTrue(success)
+
+        entry = history.get_entry_by_id(1)
+        self.assertEqual(len(entry['vulnerabilities']), 1)
+        self.assertEqual(entry['vulnerabilities'][0]['type'], 'SQLi')
+
+        # Adiciona outra vulnerabilidade e verifica se acumula
+        success_again = history.add_vulnerabilities_to_entry(1, [vuln2])
+        self.assertTrue(success_again)
+        entry_updated = history.get_entry_by_id(1)
+        self.assertEqual(len(entry_updated['vulnerabilities']), 2)
+
+        # Testa adicionar a mesma vulnerabilidade (não deve duplicar)
+        history.add_vulnerabilities_to_entry(1, [vuln1])
+        entry_final = history.get_entry_by_id(1)
+        self.assertEqual(len(entry_final['vulnerabilities']), 2)
 
 
-def test_intercept_addon_with_history():
-    """Testa o InterceptAddon com histórico"""
-    print("\nTestando InterceptAddon com histórico...")
-
-    config = InterceptConfig()
-    history = RequestHistory()
-    addon = InterceptAddon(config, history)
-
-    # Simula um flow
-    mock_flow = Mock()
-    mock_flow.request = Mock()
-    mock_flow.request.pretty_host = "exemplo.com"
-    mock_flow.request.method = "GET"
-    mock_flow.request.pretty_url = "http://exemplo.com/test"
-    mock_flow.request.path = "/test"
-    mock_flow.request.headers = {"User-Agent": "Test"}
-    mock_flow.request.content = b""
-    mock_flow.request.query = {}
-
-    mock_flow.response = Mock()
-    mock_flow.response.status_code = 200
-    mock_flow.response.headers = {"Content-Type": "text/html"}
-    mock_flow.response.content = b""
-
-    # Processa requisição e resposta
-    addon.request(mock_flow)
-    addon.response(mock_flow)
-
-    assert len(history.get_history()) == 1, "Deve ter 1 entrada no histórico"
-    print("✓ Histórico captura requisições através do addon")
-
-    print("\n✅ Todos os testes de integração passaram!")
-    return True
-
-
-if __name__ == "__main__":
-    try:
-        if not test_request_history():
-            sys.exit(1)
-
-        if not test_intercept_addon_with_history():
-            sys.exit(1)
-
-        print("\n🎉 Todos os testes de histórico passaram com sucesso!")
-        sys.exit(0)
-    except Exception as e:
-        print(f"\n❌ Erro durante os testes: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+if __name__ == '__main__':
+    unittest.main()
