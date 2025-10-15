@@ -16,6 +16,7 @@ from src.core.config import InterceptConfig
 from src.core.cookie_manager import CookieManager
 from src.core.history import RequestHistory
 from src.core.logger_config import log
+from src.core.spider import Spider
 from .tooltip import Tooltip
 
 
@@ -27,6 +28,7 @@ class ProxyGUI:
         self.history = RequestHistory()
         self.cookie_manager = CookieManager()
         self.cookie_manager.set_ui_callback(self._refresh_cookie_trees)
+        self.spider = Spider()  # Inicializa o Spider
         self.proxy_thread = None
         self.proxy_running = False
         self.proxy_master = None
@@ -50,6 +52,9 @@ class ProxyGUI:
         
         # Atualiza a fila de interceptação periodicamente
         self.check_intercept_queue()
+        
+        # Atualiza estatísticas do Spider periodicamente
+        self.update_spider_stats()
 
     def setup_ui(self):
         """Configura a interface gráfica"""
@@ -98,6 +103,9 @@ class ProxyGUI:
 
         # Tab 8: Scanner de Vulnerabilidades
         self.setup_scanner_tab()
+        
+        # Tab 9: Spider/Crawler
+        self.setup_spider_tab()
 
     def setup_rules_tab(self):
         """Configura a aba de regras"""
@@ -481,7 +489,7 @@ class ProxyGUI:
                 try:
                     proxy_options = options.Options(listen_host='127.0.0.1', listen_port=8080)
                     master = DumpMaster(proxy_options, with_termlog=False, with_dumper=False)
-                    master.addons.add(InterceptAddon(self.config, self.history, self.cookie_manager))
+                    master.addons.add(InterceptAddon(self.config, self.history, self.cookie_manager, self.spider))
                     self.proxy_master = master
                     self.proxy_loop = loop
                     await master.run()
@@ -1467,6 +1475,309 @@ class ProxyGUI:
         # Atualiza contador
         self.scanner_count_label.config(text=f"Total: {vuln_count} vulnerabilidade(s)")
 
+    def setup_spider_tab(self):
+        """Configura a aba do Spider/Crawler"""
+        spider_tab = ttk.Frame(self.notebook)
+        self.notebook.add(spider_tab, text="🕷️ Spider/Crawler")
+        
+        # Frame de controle
+        control_frame = ttk.LabelFrame(spider_tab, text="Controle do Spider", padding=10)
+        control_frame.pack(fill="x", padx=10, pady=5)
+        
+        # Status do Spider
+        status_frame = ttk.Frame(control_frame)
+        status_frame.pack(fill="x", pady=5)
+        
+        ttk.Label(status_frame, text="Status:").pack(side="left", padx=5)
+        self.spider_status_label = ttk.Label(status_frame, text="Parado", foreground="red")
+        self.spider_status_label.pack(side="left", padx=5)
+        
+        # Botões de controle
+        buttons_frame = ttk.Frame(control_frame)
+        buttons_frame.pack(fill="x", pady=5)
+        
+        self.spider_start_button = ttk.Button(buttons_frame, text="▶ Iniciar Spider", 
+                                              command=self.start_spider)
+        self.spider_start_button.pack(side="left", padx=5)
+        
+        self.spider_stop_button = ttk.Button(buttons_frame, text="⏹ Parar Spider", 
+                                             command=self.stop_spider, state="disabled")
+        self.spider_stop_button.pack(side="left", padx=5)
+        
+        self.spider_clear_button = ttk.Button(buttons_frame, text="🗑 Limpar Dados", 
+                                              command=self.clear_spider)
+        self.spider_clear_button.pack(side="left", padx=5)
+        
+        # Configurações do Spider
+        config_frame = ttk.LabelFrame(spider_tab, text="Configurações", padding=10)
+        config_frame.pack(fill="x", padx=10, pady=5)
+        
+        # URL inicial
+        ttk.Label(config_frame, text="URL Inicial (escopo):").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.spider_url_entry = ttk.Entry(config_frame, width=50)
+        self.spider_url_entry.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
+        self.spider_url_entry.insert(0, "http://example.com")
+        
+        # Profundidade máxima
+        ttk.Label(config_frame, text="Profundidade Máxima:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.spider_depth_entry = ttk.Entry(config_frame, width=10)
+        self.spider_depth_entry.grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        self.spider_depth_entry.insert(0, "3")
+        
+        # Máximo de URLs
+        ttk.Label(config_frame, text="Máximo de URLs:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        self.spider_max_urls_entry = ttk.Entry(config_frame, width=10)
+        self.spider_max_urls_entry.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        self.spider_max_urls_entry.insert(0, "1000")
+        
+        config_frame.columnconfigure(1, weight=1)
+        
+        # Tooltips
+        Tooltip(self.spider_url_entry, "URL base para iniciar o crawling (define o escopo)")
+        Tooltip(self.spider_depth_entry, "Número máximo de níveis de links a seguir")
+        Tooltip(self.spider_max_urls_entry, "Número máximo de URLs a descobrir")
+        
+        # Estatísticas
+        stats_frame = ttk.LabelFrame(spider_tab, text="Estatísticas", padding=10)
+        stats_frame.pack(fill="x", padx=10, pady=5)
+        
+        self.spider_stats_label = ttk.Label(stats_frame, 
+                                           text="URLs Descobertas: 0 | Na Fila: 0 | Visitadas: 0 | Formulários: 0",
+                                           font=('TkDefaultFont', 9))
+        self.spider_stats_label.pack(pady=5)
+        
+        # Notebook para resultados
+        results_notebook = ttk.Notebook(spider_tab)
+        results_notebook.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Tab 1: URLs Descobertas
+        urls_frame = ttk.Frame(results_notebook)
+        results_notebook.add(urls_frame, text="URLs Descobertas")
+        
+        # Barra de ferramentas para URLs
+        urls_toolbar = ttk.Frame(urls_frame)
+        urls_toolbar.pack(fill="x", padx=5, pady=5)
+        
+        ttk.Button(urls_toolbar, text="↻ Atualizar", command=self.refresh_spider_urls).pack(side="left", padx=5)
+        ttk.Button(urls_toolbar, text="📋 Copiar Todas", command=self.copy_all_spider_urls).pack(side="left", padx=5)
+        
+        # Lista de URLs
+        urls_list_frame = ttk.Frame(urls_frame)
+        urls_list_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        urls_scrollbar_y = ttk.Scrollbar(urls_list_frame, orient="vertical")
+        urls_scrollbar_y.pack(side="right", fill="y")
+        
+        urls_scrollbar_x = ttk.Scrollbar(urls_list_frame, orient="horizontal")
+        urls_scrollbar_x.pack(side="bottom", fill="x")
+        
+        self.spider_urls_listbox = tk.Listbox(urls_list_frame, 
+                                               yscrollcommand=urls_scrollbar_y.set,
+                                               xscrollcommand=urls_scrollbar_x.set,
+                                               font=('Courier', 9))
+        self.spider_urls_listbox.pack(side="left", fill="both", expand=True)
+        
+        urls_scrollbar_y.config(command=self.spider_urls_listbox.yview)
+        urls_scrollbar_x.config(command=self.spider_urls_listbox.xview)
+        
+        # Tab 2: Formulários
+        forms_frame = ttk.Frame(results_notebook)
+        results_notebook.add(forms_frame, text="Formulários")
+        
+        forms_toolbar = ttk.Frame(forms_frame)
+        forms_toolbar.pack(fill="x", padx=5, pady=5)
+        
+        ttk.Button(forms_toolbar, text="↻ Atualizar", command=self.refresh_spider_forms).pack(side="left", padx=5)
+        
+        # Treeview para formulários
+        forms_tree_frame = ttk.Frame(forms_frame)
+        forms_tree_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        forms_scrollbar = ttk.Scrollbar(forms_tree_frame)
+        forms_scrollbar.pack(side="right", fill="y")
+        
+        self.spider_forms_tree = ttk.Treeview(forms_tree_frame, 
+                                              columns=("method", "url", "inputs"),
+                                              show="headings",
+                                              yscrollcommand=forms_scrollbar.set)
+        
+        self.spider_forms_tree.heading("method", text="Método")
+        self.spider_forms_tree.heading("url", text="URL do Formulário")
+        self.spider_forms_tree.heading("inputs", text="Campos")
+        
+        self.spider_forms_tree.column("method", width=80)
+        self.spider_forms_tree.column("url", width=400)
+        self.spider_forms_tree.column("inputs", width=200)
+        
+        self.spider_forms_tree.pack(side="left", fill="both", expand=True)
+        forms_scrollbar.config(command=self.spider_forms_tree.yview)
+        
+        # Tab 3: Sitemap
+        sitemap_frame = ttk.Frame(results_notebook)
+        results_notebook.add(sitemap_frame, text="Sitemap")
+        
+        sitemap_toolbar = ttk.Frame(sitemap_frame)
+        sitemap_toolbar.pack(fill="x", padx=5, pady=5)
+        
+        ttk.Button(sitemap_toolbar, text="↻ Atualizar", command=self.refresh_spider_sitemap).pack(side="left", padx=5)
+        ttk.Button(sitemap_toolbar, text="💾 Exportar", command=self.export_spider_sitemap).pack(side="left", padx=5)
+        
+        # Área de texto para sitemap
+        sitemap_text_frame = ttk.Frame(sitemap_frame)
+        sitemap_text_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        sitemap_scrollbar = ttk.Scrollbar(sitemap_text_frame)
+        sitemap_scrollbar.pack(side="right", fill="y")
+        
+        self.spider_sitemap_text = scrolledtext.ScrolledText(sitemap_text_frame, 
+                                                             wrap="none",
+                                                             font=('Courier', 9),
+                                                             yscrollcommand=sitemap_scrollbar.set)
+        self.spider_sitemap_text.pack(side="left", fill="both", expand=True)
+        sitemap_scrollbar.config(command=self.spider_sitemap_text.yview)
+
+    def start_spider(self):
+        """Inicia o Spider"""
+        if not self.proxy_running:
+            messagebox.showwarning("Aviso", "Inicie o proxy primeiro!")
+            return
+        
+        if self.spider.is_running():
+            messagebox.showwarning("Aviso", "Spider já está em execução!")
+            return
+        
+        # Obtém configurações
+        url = self.spider_url_entry.get().strip()
+        if not url:
+            messagebox.showerror("Erro", "Digite uma URL inicial!")
+            return
+        
+        try:
+            max_depth = int(self.spider_depth_entry.get())
+            max_urls = int(self.spider_max_urls_entry.get())
+        except ValueError:
+            messagebox.showerror("Erro", "Valores numéricos inválidos!")
+            return
+        
+        # Inicia o spider
+        self.spider.start(target_urls=[url], max_depth=max_depth, max_urls=max_urls)
+        
+        # Atualiza UI
+        self.spider_status_label.config(text="Em Execução", foreground="green")
+        self.spider_start_button.config(state="disabled")
+        self.spider_stop_button.config(state="normal")
+        
+        log.info(f"Spider iniciado com URL: {url}")
+        messagebox.showinfo("Spider", f"Spider iniciado!\nURL: {url}\nNavegue no site para descobrir páginas.")
+    
+    def stop_spider(self):
+        """Para o Spider"""
+        self.spider.stop()
+        
+        # Atualiza UI
+        self.spider_status_label.config(text="Parado", foreground="red")
+        self.spider_start_button.config(state="normal")
+        self.spider_stop_button.config(state="disabled")
+        
+        log.info("Spider parado")
+        messagebox.showinfo("Spider", "Spider parado!")
+    
+    def clear_spider(self):
+        """Limpa os dados do Spider"""
+        if messagebox.askyesno("Confirmar", "Deseja limpar todos os dados do Spider?"):
+            self.spider.clear()
+            
+            # Limpa UI
+            self.spider_urls_listbox.delete(0, tk.END)
+            
+            for item in self.spider_forms_tree.get_children():
+                self.spider_forms_tree.delete(item)
+            
+            self.spider_sitemap_text.delete('1.0', tk.END)
+            
+            self.spider_status_label.config(text="Parado", foreground="red")
+            self.spider_start_button.config(state="normal")
+            self.spider_stop_button.config(state="disabled")
+            
+            log.info("Dados do Spider limpos")
+    
+    def update_spider_stats(self):
+        """Atualiza as estatísticas do Spider periodicamente"""
+        if hasattr(self, 'spider_stats_label'):
+            stats = self.spider.get_stats()
+            self.spider_stats_label.config(
+                text=f"URLs Descobertas: {stats['discovered_urls']} | "
+                     f"Na Fila: {stats['queue_size']} | "
+                     f"Visitadas: {stats['visited']} | "
+                     f"Formulários: {stats['forms_found']}"
+            )
+        
+        # Reagenda para 2 segundos depois
+        self.root.after(2000, self.update_spider_stats)
+    
+    def refresh_spider_urls(self):
+        """Atualiza a lista de URLs descobertas"""
+        self.spider_urls_listbox.delete(0, tk.END)
+        
+        urls = self.spider.get_discovered_urls()
+        for url in urls:
+            self.spider_urls_listbox.insert(tk.END, url)
+        
+        log.info(f"Lista de URLs atualizada: {len(urls)} URLs")
+    
+    def copy_all_spider_urls(self):
+        """Copia todas as URLs para a área de transferência"""
+        urls = self.spider.get_discovered_urls()
+        if urls:
+            urls_text = "\n".join(urls)
+            self.root.clipboard_clear()
+            self.root.clipboard_append(urls_text)
+            messagebox.showinfo("Copiado", f"{len(urls)} URLs copiadas para a área de transferência!")
+        else:
+            messagebox.showwarning("Aviso", "Nenhuma URL descoberta ainda!")
+    
+    def refresh_spider_forms(self):
+        """Atualiza a lista de formulários"""
+        # Limpa árvore
+        for item in self.spider_forms_tree.get_children():
+            self.spider_forms_tree.delete(item)
+        
+        # Adiciona formulários
+        forms = self.spider.get_forms()
+        for form in forms:
+            inputs_str = ", ".join([f"{inp['name']}({inp['type']})" for inp in form['inputs'] if inp['name']])
+            self.spider_forms_tree.insert("", "end", 
+                                         values=(form['method'], form['url'], inputs_str))
+        
+        log.info(f"Lista de formulários atualizada: {len(forms)} formulários")
+    
+    def refresh_spider_sitemap(self):
+        """Atualiza o sitemap"""
+        self.spider_sitemap_text.delete('1.0', tk.END)
+        sitemap_text = self.spider.export_sitemap_text()
+        self.spider_sitemap_text.insert('1.0', sitemap_text)
+        
+        log.info("Sitemap atualizado")
+    
+    def export_spider_sitemap(self):
+        """Exporta o sitemap para arquivo"""
+        from tkinter import filedialog
+        
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        
+        if filename:
+            try:
+                sitemap_text = self.spider.export_sitemap_text()
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(sitemap_text)
+                messagebox.showinfo("Sucesso", f"Sitemap exportado para:\n{filename}")
+                log.info(f"Sitemap exportado para: {filename}")
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao exportar sitemap:\n{str(e)}")
+                log.error(f"Erro ao exportar sitemap: {e}")
 
     def run(self):
         """Inicia a aplicação"""
