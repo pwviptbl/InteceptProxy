@@ -1828,9 +1828,10 @@ class ProxyGUI:
         }
         self.config.add_intercept_response(response_data)
 
-        # Reseta UI
+        # Guarda a URL para o log e reseta a UI
+        url = self.current_intercept_request.get('url') if isinstance(self.current_intercept_request, dict) else None
         self._reset_intercept_ui()
-        log.info(f"Requisição enviada: {self.current_intercept_request['url']}")
+        log.info(f"Requisição enviada: {url}")
 
     def drop_request(self):
         """Cancela a requisição interceptada."""
@@ -1841,9 +1842,10 @@ class ProxyGUI:
         response_data = {'action': 'drop'}
         self.config.add_intercept_response(response_data)
 
-        # Reseta UI
+        # Guarda a URL para o log e reseta a UI
+        url = self.current_intercept_request.get('url') if isinstance(self.current_intercept_request, dict) else None
         self._reset_intercept_ui()
-        log.info(f"Requisição cancelada: {self.current_intercept_request['url']}")
+        log.info(f"Requisição cancelada: {url}")
 
     def _reset_intercept_ui(self):
         """Reseta a UI de interceptação."""
