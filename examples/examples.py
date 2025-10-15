@@ -6,10 +6,10 @@ Demonstra como criar e configurar regras via código
 import sys
 import os
 
-# Adiciona o diretório ao path
-sys.path.insert(0, os.path.dirname(__file__))
+# Adiciona o diretório src ao path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from intercept_proxy import InterceptConfig
+from core.config import InterceptConfig
 
 
 def exemplo_basico():

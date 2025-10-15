@@ -78,7 +78,7 @@ This document summarizes the WebSocket support implementation in InteceptProxy, 
   - `README.md`: Updated with WebSocket in features list
 
 ### 7. Demo Application
-- **File**: `demo_websocket.py`
+- **File**: `examples/demo_websocket.py`
 - **Description**: Interactive demonstration script
 - **Features**:
   - Simulates WebSocket connections
@@ -93,7 +93,7 @@ This document summarizes the WebSocket support implementation in InteceptProxy, 
 2. `test/test_websocket.py` - 89 lines
 3. `docs/WEBSOCKET_README.md` - 158 lines
 4. `docs/WEBSOCKET_ARCHITECTURE.md` - 240 lines
-5. `demo_websocket.py` - 147 lines
+5. `examples/demo_websocket.py` - 147 lines
 
 ### Files Modified
 1. `src/core/addon.py` - Added ~35 lines

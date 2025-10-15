@@ -6,7 +6,7 @@
 ```bash
 git clone https://github.com/pwviptbl/InteceptProxy.git
 cd InteceptProxy
-pip install -r requirements.txt
+pip install -r config/requirements.txt
 ```
 
 ### 2. Execute a aplicação
@@ -63,7 +63,7 @@ python run_proxy_headless.py
 
 #### Opção C: Via Código Python
 
-1. Execute: `python examples.py` (veja vários exemplos)
+1. Execute: `python examples/examples.py` (veja vários exemplos)
 
 2. Ou crie seu próprio script:
 ```python
@@ -99,7 +99,7 @@ print("Regra adicionada!")
 python test_intercept.py
 
 # Ver exemplos interativos
-python examples.py
+python examples/examples.py
 
 # Executar em modo headless
 python run_proxy_headless.py
@@ -156,7 +156,7 @@ python intercept_proxy.py
 
 | Problema | Solução |
 |----------|---------|
-| `ModuleNotFoundError: No module named 'mitmproxy'` | `pip install -r requirements.txt` |
+| `ModuleNotFoundError: No module named 'mitmproxy'` | `pip install -r config/requirements.txt` |
 | `No module named 'tkinter'` | Use `run_proxy_headless.py` ou instale tkinter |
 | `Address already in use` | Porta 8080 ocupada - feche outra aplicação ou mude a porta |
 | Regras não funcionam | Verifique: regra ativada? navegador configurado? host/path corretos? |
@@ -169,7 +169,7 @@ Após o Quick Start, consulte:
 - **README.md** - Documentação completa
 - **USAGE_GUIDE.md** - Guia detalhado de uso
 - **ARCHITECTURE.md** - Como funciona internamente
-- **examples.py** - Exemplos práticos
+- **examples/examples.py** - Exemplos práticos
 
 ## Resumo de 30 Segundos
 
