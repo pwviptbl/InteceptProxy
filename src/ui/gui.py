@@ -38,6 +38,10 @@ class ProxyGUI:
         self.repeater_request_data = None
         self.current_intercept_request = None
         self.intercept_response_text = None
+        
+        # Comparator state
+        self.comparator_request_1 = None
+        self.comparator_request_2 = None
 
         # Janela principal com tema
         self.root = ThemedTk(theme="arc")
@@ -98,13 +102,16 @@ class ProxyGUI:
         # Tab 7: Decoder
         self.setup_decoder_tab()
 
-        # Tab 8: Cookie Jar
+        # Tab 8: Comparator
+        self.setup_comparator_tab()
+
+        # Tab 9: Cookie Jar
         self.setup_cookie_jar_tab()
 
-        # Tab 9: Scanner de Vulnerabilidades
+        # Tab 10: Scanner de Vulnerabilidades
         self.setup_scanner_tab()
         
-        # Tab 10: Spider/Crawler
+        # Tab 11: Spider/Crawler
         self.setup_spider_tab()
 
     def setup_rules_tab(self):
@@ -924,6 +931,15 @@ class ProxyGUI:
             label="Enviar para o Sender",
             command=lambda: self.send_to_sender(selected_entry)
         )
+        context_menu.add_separator()
+        context_menu.add_command(
+            label="Definir como Requisição 1 (Comparador)",
+            command=lambda: self.set_comparator_request_1(selected_entry)
+        )
+        context_menu.add_command(
+            label="Definir como Requisição 2 (Comparador)",
+            command=lambda: self.set_comparator_request_2(selected_entry)
+        )
 
         # Exibe o menu na posição do cursor
         context_menu.tk_popup(event.x_root, event.y_root)
@@ -1490,6 +1506,205 @@ class ProxyGUI:
                    command=lambda: self._handle_decode_action(decoder.url_encode)).grid(row=1, column=0, padx=5, pady=5)
         ttk.Button(buttons_frame, text="URL Decode",
                    command=lambda: self._handle_decode_action(decoder.url_decode)).grid(row=1, column=1, padx=5, pady=5)
+
+    def setup_comparator_tab(self):
+        """Configura a aba de Comparador de Requisições."""
+        comparator_tab = ttk.Frame(self.notebook)
+        self.notebook.add(comparator_tab, text="Comparador")
+
+        # Frame de instruções
+        info_frame = ttk.LabelFrame(comparator_tab, text="Instruções", padding=5)
+        info_frame.pack(fill="x", padx=10, pady=5)
+        
+        info_label = ttk.Label(info_frame, 
+                              text="Use o menu de contexto (clique direito) no Histórico de Requisições para selecionar duas requisições para comparar.",
+                              wraplength=900)
+        info_label.pack(padx=5, pady=5)
+
+        # Frame de status
+        status_frame = ttk.Frame(comparator_tab)
+        status_frame.pack(fill="x", padx=10, pady=5)
+        
+        # Labels para mostrar quais requisições foram selecionadas
+        req1_frame = ttk.LabelFrame(status_frame, text="Requisição 1", padding=5)
+        req1_frame.pack(side="left", fill="both", expand=True, padx=5)
+        self.comparator_req1_label = ttk.Label(req1_frame, text="Nenhuma requisição selecionada", foreground="gray")
+        self.comparator_req1_label.pack()
+        
+        req2_frame = ttk.LabelFrame(status_frame, text="Requisição 2", padding=5)
+        req2_frame.pack(side="left", fill="both", expand=True, padx=5)
+        self.comparator_req2_label = ttk.Label(req2_frame, text="Nenhuma requisição selecionada", foreground="gray")
+        self.comparator_req2_label.pack()
+
+        # Botões de ação
+        buttons_frame = ttk.Frame(comparator_tab)
+        buttons_frame.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Button(buttons_frame, text="Comparar", command=self.compare_requests).pack(side="left", padx=5)
+        ttk.Button(buttons_frame, text="Limpar", command=self.clear_comparator).pack(side="left", padx=5)
+
+        # Notebook para Request/Response comparisons
+        self.comparator_notebook = ttk.Notebook(comparator_tab)
+        self.comparator_notebook.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Tab de comparação de Request
+        request_compare_tab = ttk.Frame(self.comparator_notebook)
+        self.comparator_notebook.add(request_compare_tab, text="Request Comparison")
+        
+        request_paned = ttk.PanedWindow(request_compare_tab, orient=tk.HORIZONTAL)
+        request_paned.pack(fill="both", expand=True)
+        
+        # Request 1
+        req1_frame = ttk.LabelFrame(request_paned, text="Request 1", padding=5)
+        request_paned.add(req1_frame, weight=1)
+        self.comparator_request1_text = scrolledtext.ScrolledText(req1_frame, wrap=tk.WORD, height=20)
+        self.comparator_request1_text.pack(fill="both", expand=True)
+        
+        # Request 2
+        req2_frame = ttk.LabelFrame(request_paned, text="Request 2", padding=5)
+        request_paned.add(req2_frame, weight=1)
+        self.comparator_request2_text = scrolledtext.ScrolledText(req2_frame, wrap=tk.WORD, height=20)
+        self.comparator_request2_text.pack(fill="both", expand=True)
+
+        # Tab de comparação de Response
+        response_compare_tab = ttk.Frame(self.comparator_notebook)
+        self.comparator_notebook.add(response_compare_tab, text="Response Comparison")
+        
+        response_paned = ttk.PanedWindow(response_compare_tab, orient=tk.HORIZONTAL)
+        response_paned.pack(fill="both", expand=True)
+        
+        # Response 1
+        resp1_frame = ttk.LabelFrame(response_paned, text="Response 1", padding=5)
+        response_paned.add(resp1_frame, weight=1)
+        self.comparator_response1_text = scrolledtext.ScrolledText(resp1_frame, wrap=tk.WORD, height=20)
+        self.comparator_response1_text.pack(fill="both", expand=True)
+        
+        # Response 2
+        resp2_frame = ttk.LabelFrame(response_paned, text="Response 2", padding=5)
+        response_paned.add(resp2_frame, weight=1)
+        self.comparator_response2_text = scrolledtext.ScrolledText(resp2_frame, wrap=tk.WORD, height=20)
+        self.comparator_response2_text.pack(fill="both", expand=True)
+
+        # Configurar tags para highlighting de diferenças
+        for text_widget in [self.comparator_request1_text, self.comparator_request2_text,
+                           self.comparator_response1_text, self.comparator_response2_text]:
+            text_widget.tag_configure("diff", background="#ffcccc")
+            text_widget.tag_configure("same", background="white")
+
+    def set_comparator_request_1(self, entry):
+        """Define a primeira requisição para comparação."""
+        self.comparator_request_1 = entry
+        label_text = f"{entry['method']} {entry['host']}{entry['path']} - {entry['timestamp']}"
+        self.comparator_req1_label.config(text=label_text, foreground="black")
+        log.info(f"Requisição 1 selecionada para comparação: {label_text}")
+        
+        # Muda para a aba do comparador
+        self.notebook.select(7)  # Tab 8 (índice 7)
+
+    def set_comparator_request_2(self, entry):
+        """Define a segunda requisição para comparação."""
+        self.comparator_request_2 = entry
+        label_text = f"{entry['method']} {entry['host']}{entry['path']} - {entry['timestamp']}"
+        self.comparator_req2_label.config(text=label_text, foreground="black")
+        log.info(f"Requisição 2 selecionada para comparação: {label_text}")
+        
+        # Muda para a aba do comparador
+        self.notebook.select(7)  # Tab 8 (índice 7)
+
+    def compare_requests(self):
+        """Compara as duas requisições selecionadas."""
+        if not self.comparator_request_1 or not self.comparator_request_2:
+            messagebox.showwarning("Aviso", "Por favor, selecione duas requisições para comparar!")
+            return
+
+        # Formata as requisições
+        req1_text = self._format_request(self.comparator_request_1)
+        req2_text = self._format_request(self.comparator_request_2)
+        
+        resp1_text = self._format_response(self.comparator_request_1)
+        resp2_text = self._format_response(self.comparator_request_2)
+
+        # Limpa os campos
+        self.comparator_request1_text.delete('1.0', tk.END)
+        self.comparator_request2_text.delete('1.0', tk.END)
+        self.comparator_response1_text.delete('1.0', tk.END)
+        self.comparator_response2_text.delete('1.0', tk.END)
+
+        # Insere o texto
+        self.comparator_request1_text.insert('1.0', req1_text)
+        self.comparator_request2_text.insert('1.0', req2_text)
+        self.comparator_response1_text.insert('1.0', resp1_text)
+        self.comparator_response2_text.insert('1.0', resp2_text)
+
+        # Aplica highlighting de diferenças
+        self._highlight_differences(self.comparator_request1_text, self.comparator_request2_text, req1_text, req2_text)
+        self._highlight_differences(self.comparator_response1_text, self.comparator_response2_text, resp1_text, resp2_text)
+
+        log.info("Comparação realizada")
+
+    def _format_request(self, entry):
+        """Formata uma requisição para exibição."""
+        request_info = f"{entry['method']} {entry['path']} HTTP/1.1\n"
+        request_info += f"Host: {entry['host']}\n"
+        for key, value in entry['request_headers'].items():
+            request_info += f"{key}: {value}\n"
+        
+        if entry['request_body']:
+            request_info += f"\n{entry['request_body']}"
+        
+        return request_info
+
+    def _format_response(self, entry):
+        """Formata uma resposta para exibição."""
+        response_info = f"Status: {entry['status']}\n\n"
+        for key, value in entry['response_headers'].items():
+            response_info += f"{key}: {value}\n"
+        
+        if entry['response_body']:
+            response_info += f"\n{entry['response_body']}"
+        
+        return response_info
+
+    def _highlight_differences(self, text_widget1, text_widget2, text1, text2):
+        """Aplica highlighting de diferenças entre dois textos usando difflib."""
+        import difflib
+        
+        lines1 = text1.splitlines(keepends=True)
+        lines2 = text2.splitlines(keepends=True)
+        
+        # Usa SequenceMatcher para encontrar diferenças
+        matcher = difflib.SequenceMatcher(None, lines1, lines2)
+        
+        # Marca as linhas diferentes
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'replace' or tag == 'delete':
+                # Marca linhas diferentes na primeira janela
+                start_line = i1 + 1
+                end_line = i2 + 1
+                for line_num in range(start_line, end_line):
+                    text_widget1.tag_add("diff", f"{line_num}.0", f"{line_num}.end")
+            
+            if tag == 'replace' or tag == 'insert':
+                # Marca linhas diferentes na segunda janela
+                start_line = j1 + 1
+                end_line = j2 + 1
+                for line_num in range(start_line, end_line):
+                    text_widget2.tag_add("diff", f"{line_num}.0", f"{line_num}.end")
+
+    def clear_comparator(self):
+        """Limpa o comparador."""
+        self.comparator_request_1 = None
+        self.comparator_request_2 = None
+        
+        self.comparator_req1_label.config(text="Nenhuma requisição selecionada", foreground="gray")
+        self.comparator_req2_label.config(text="Nenhuma requisição selecionada", foreground="gray")
+        
+        self.comparator_request1_text.delete('1.0', tk.END)
+        self.comparator_request2_text.delete('1.0', tk.END)
+        self.comparator_response1_text.delete('1.0', tk.END)
+        self.comparator_response2_text.delete('1.0', tk.END)
+        
+        log.info("Comparador limpo")
 
     def toggle_intercept(self):
         """Alterna o estado de interceptação manual."""
