@@ -4,9 +4,11 @@ Demo script to show the history functionality
 """
 import sys
 import os
-sys.path.insert(0, os.path.dirname(__file__))
 
-from intercept_proxy import RequestHistory
+# Adiciona o diretório src ao path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+from core.history import RequestHistory
 from unittest.mock import Mock
 from datetime import datetime, timedelta
 

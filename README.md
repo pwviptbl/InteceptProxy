@@ -65,7 +65,7 @@ cd InteceptProxy
 
 2. Instale as dependências:
 ```bash
-pip install -r requirements.txt
+pip install -r config/requirements.txt
 ```
 
 ### Ambiente Virtual
@@ -340,7 +340,9 @@ InteceptProxy/
 │   └── ui/                 # Interface gráfica
 ├── cli.py                  # Ponto de entrada para a CLI
 ├── intercept_proxy.py      # Ponto de entrada para a GUI
-├── requirements.txt        # Dependências
+├── config/                 # Arquivos de configuração
+│   ├── requirements.txt    # Dependências
+│   └── intercept_config.example.json  # Configuração de exemplo
 └── README.md
 ```
 

@@ -165,7 +165,7 @@ python3 test/test_comparator.py
 
 Execute a demonstração:
 ```bash
-python3 demo_comparator.py
+python3 examples/demo_comparator.py
 ```
 
 ## 📊 Benefícios

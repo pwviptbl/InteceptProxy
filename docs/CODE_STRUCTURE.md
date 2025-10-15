@@ -19,7 +19,8 @@ InteceptProxy/
 │
 └── (existing files unchanged)
     ├── test_intercept.py
-    ├── requirements.txt
+    ├── config/
+    │   └── requirements.txt
     ├── run_proxy_headless.py
     └── ...
 ```
