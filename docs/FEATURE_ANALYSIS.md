@@ -30,12 +30,19 @@
 - ✅ Visualização da resposta
 - ✅ Integração com Cookie Jar
 
-#### 5. **Intruder/Sender (Envio em Massa)**
+#### 5. **Intruder/Sender (Envio em Massa)** 💥
 - ✅ Envio de múltiplas requisições com valores diferentes
 - ✅ Suporte a threads paralelas
 - ✅ Leitura de payloads de arquivo
 - ✅ Tabela de resultados com status codes
 - ✅ CLI para automação
+- ✅ **NOVO: Intruder Avançado** com:
+  - Múltiplas posições de payload (§markers§)
+  - 4 tipos de ataque (Sniper, Battering Ram, Pitchfork, Cluster Bomb)
+  - Payload processing (URL encode, Base64, MD5, SHA256, etc.)
+  - Prefix/Suffix para payloads
+  - Grep extraction com regex
+  - Resource pool management (controle de threads)
 
 #### 6. **Decoder (Codificador/Decodificador)**
 - ✅ Base64 encode/decode
@@ -83,12 +90,12 @@
    - Análise de estrutura de diretórios
    - Construção de sitemap
 
-3. ❌ **Intruder Avançado**
-   - Posições de payload múltiplas
-   - Tipos de ataque (Sniper, Battering Ram, Pitchfork, Cluster Bomb)
-   - Payload processing (encode, hash, etc.)
-   - Grep extraction (extração de dados das respostas)
-   - Resource pool management
+3. ✅ **Intruder Avançado** **IMPLEMENTADO**
+   - Posições de payload múltiplas ✅
+   - Tipos de ataque (Sniper, Battering Ram, Pitchfork, Cluster Bomb) ✅
+   - Payload processing (encode, hash, etc.) ✅
+   - Grep extraction (extração de dados das respostas) ✅
+   - Resource pool management ✅
 
 4. ❌ **Comparador de Requisições (Comparer)**
    - Comparação visual de duas requisições/respostas
@@ -249,15 +256,17 @@
 **Benefício:** Organização e foco
 **Esforço:** Baixo
 
-#### 6. **Intruder Avançado** 💥
+#### 6. **Intruder Avançado** 💥 **IMPLEMENTADO**
 **Descrição:** Melhorar o Sender existente
-- Múltiplas posições de payload
-- Tipos de ataque (Sniper, Pitchfork, etc.)
-- Payload processing (encode, hash, prefix, suffix)
-- Grep/Extract de respostas
-- Análise de padrões nas respostas
+- Múltiplas posições de payload ✅
+- Tipos de ataque (Sniper, Pitchfork, etc.) ✅
+- Payload processing (encode, hash, prefix, suffix) ✅
+- Grep/Extract de respostas ✅
+- Análise de padrões nas respostas ✅
 
 **Benefício:** Essencial para fuzzing e brute-force
+**Esforço:** Alto
+**Status:** ✅ Implementado em src/core/advanced_sender.py com interface na aba Intruder 💥
 **Esforço:** Alto
 
 #### 7. **WebSocket Support** 🔌
