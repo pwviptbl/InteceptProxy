@@ -20,7 +20,7 @@ def _substitute_value(source: str, param_name: str, new_value: str) -> str:
         else:
             return f"{source}&{param_name}={new_value}"
 
-def send_from_raw(raw_request: str, param_name: str = None, new_value: str = None):
+def send_from_raw(raw_request: str, param_name: str = None, new_value: str = None, proxy_port: int = 8080):
     """
     Parses a raw HTTP request, optionally substitutes a parameter,
     and resends it, returning the response object.
@@ -66,7 +66,7 @@ def send_from_raw(raw_request: str, param_name: str = None, new_value: str = Non
         # 5. Prepare for resending
         headers_to_send = {k: v for k, v in headers.items() if k.lower() not in ['host', 'content-length']}
 
-        proxies = {"http": "http://127.0.0.1:8080", "https": "http://127.0.0.1:8080"}
+        proxies = {"http": f"http://127.0.0.1:{proxy_port}", "https": f"http://127.0.0.1:{proxy_port}"}
 
         log.info(f"Resending request: {method} {full_url}")
 
@@ -86,7 +86,7 @@ def send_from_raw(raw_request: str, param_name: str = None, new_value: str = Non
         log.error(f"Error resending request: {e}", exc_info=True)
         return None
 
-def run_sender_from_file(raw_request: str, file_path: str, param_name: str, num_threads: int, queue=None):
+def run_sender_from_file(raw_request: str, file_path: str, param_name: str, num_threads: int, queue=None, proxy_port: int = 8080):
     """
     Reads a file and resends the base request for each value in the file, in parallel.
     """
@@ -106,7 +106,7 @@ def run_sender_from_file(raw_request: str, file_path: str, param_name: str, num_
 
     completed_requests = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        futures = [executor.submit(send_from_raw, raw_request, param_name, value) for value in values]
+        futures = [executor.submit(send_from_raw, raw_request, param_name, value, proxy_port) for value in values]
 
         for future in concurrent.futures.as_completed(futures):
             response = future.result()
@@ -126,3 +126,49 @@ def run_sender_from_file(raw_request: str, file_path: str, param_name: str, num_
     log.info("Sender: Bulk send completed.")
     if queue:
         queue.put({'type': 'progress_done'})
+
+def run_sender(url: str, file_path: str, param_name: str, num_threads: int):
+    """
+    Simplified function for CLI usage - sends GET requests with values from a file.
+    """
+    if not os.path.exists(file_path):
+        log.error(f"Sender: File '{file_path}' not found.")
+        return
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        values = [line.strip() for line in f.readlines()]
+
+    total_requests = len(values)
+    log.info(f"Sender: Starting bulk send of {total_requests} requests to {url}")
+
+    completed_requests = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        futures = []
+        for value in values:
+            # Build the URL with the parameter
+            if '?' in url:
+                full_url = f"{url}&{param_name}={value}"
+            else:
+                full_url = f"{url}?{param_name}={value}"
+            
+            futures.append(executor.submit(_send_get_request, full_url))
+
+        for future in concurrent.futures.as_completed(futures):
+            response = future.result()
+            completed_requests += 1
+            if response:
+                log.info(f"[{completed_requests}/{total_requests}] {response.request.url} -> {response.status_code}")
+            else:
+                log.error(f"[{completed_requests}/{total_requests}] Failed")
+
+    log.info("Sender: Bulk send completed.")
+
+def _send_get_request(url: str):
+    """Helper function to send a GET request without proxy."""
+    try:
+        response = requests.get(url, verify=False, timeout=10)
+        return response
+    except Exception as e:
+        log.error(f"Error sending request to {url}: {e}")
+        return None
+

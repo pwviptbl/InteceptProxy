@@ -139,10 +139,38 @@ def toggle_rule(index):
         click.echo(click.style(f"✗ Erro: Índice #{index} é inválido.", fg="red"))
 
 
+@cli.command('set-port')
+@click.argument('port', type=int)
+def set_port(port):
+    """Define a porta do proxy."""
+    config = InterceptConfig()
+    success, message = config.set_port(port)
+    
+    if success:
+        click.echo(click.style(f"✓ {message}", fg="green"))
+    else:
+        click.echo(click.style(f"✗ {message}", fg="red"))
+
+
+@cli.command('get-port')
+def get_port():
+    """Mostra a porta configurada do proxy."""
+    config = InterceptConfig()
+    port = config.get_port()
+    click.echo(click.style(f"Porta configurada: {port}", fg="cyan"))
+
+
 @cli.command('run')
-def run_proxy():
+@click.option('--port', type=int, default=None, help="Porta para o proxy escutar (padrão: configuração salva ou 8080)")
+def run_proxy(port):
     """Inicia o proxy em modo headless."""
     config = InterceptConfig()
+    
+    # Se uma porta foi especificada via CLI, usa ela; caso contrário usa a configuração salva
+    if port is not None:
+        config.port = port
+    
+    actual_port = config.get_port()
     rules = config.get_rules()
 
     if not rules:
@@ -153,10 +181,10 @@ def run_proxy():
     click.echo(click.style("🚀 Iniciando InteceptProxy em modo headless...", bold=True, fg="cyan"))
     click.echo(click.style("=" * 60, fg="cyan"))
 
-    log.info("Proxy (CLI) iniciando...")
+    log.info(f"Proxy (CLI) iniciando na porta {actual_port}...")
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(start_proxy_headless(config))
+        loop.run_until_complete(start_proxy_headless(config, actual_port))
     except KeyboardInterrupt:
         click.echo("\n✓ Proxy encerrado pelo usuário.")
         log.info("Proxy (CLI) encerrado pelo usuário.")
@@ -165,13 +193,13 @@ def run_proxy():
         log.error(f"Erro ao executar proxy (CLI): {e}", exc_info=True)
 
 
-async def start_proxy_headless(config):
+async def start_proxy_headless(config, port):
     """Função assíncrona para iniciar o mitmdump."""
-    proxy_options = options.Options(listen_host='127.0.0.1', listen_port=8080)
+    proxy_options = options.Options(listen_host='127.0.0.1', listen_port=port)
     master = DumpMaster(proxy_options, with_termlog=True, with_dumper=False)
     master.addons.add(InterceptAddon(config))
 
-    click.echo(click.style("\nProxy escutando em http://127.0.0.1:8080", fg="green"))
+    click.echo(click.style(f"\nProxy escutando em http://127.0.0.1:{port}", fg="green"))
     click.echo("Pressione Ctrl+C para parar.")
 
     await master.run()
