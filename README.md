@@ -22,6 +22,11 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
   - Path Traversal
   - CVEs conhecidas
   - Informações sensíveis expostas
+- ✅ **Spider/Crawler** 🕷️ - Descoberta automática de:
+  - URLs e endpoints
+  - Formulários e seus campos
+  - Estrutura do site (sitemap)
+  - Parâmetros de query strings
 - ✅ Histórico de requisições com filtros avançados
 - ✅ Visualização detalhada de Request/Response
 - ✅ Filtros por método HTTP e regex de domínio
@@ -133,6 +138,42 @@ Na aba **"Intercept Manual"**, você pode pausar requisições e modificá-las m
 > 💡 **Dica**: Esta funcionalidade é inspirada no Burp Suite e é ideal para testes manuais de segurança e análise de requisições.
 
 Para mais informações sobre o Intercept Manual, veja [docs/INTERCEPT_MANUAL_FEATURE.md](docs/INTERCEPT_MANUAL_FEATURE.md)
+
+### 3.2. Spider/Crawler (Descoberta Automática)
+
+Na aba **"🕷️ Spider/Crawler"**, você pode descobrir automaticamente páginas, endpoints e formulários:
+
+1. **Iniciar o Proxy**: 
+   - Primeiro, certifique-se de que o proxy está em execução
+   
+2. **Configurar o Spider**:
+   - **URL Inicial**: Digite a URL base do site a mapear (ex: `http://exemplo.com`)
+   - **Profundidade Máxima**: Número de níveis de links a seguir (padrão: 3)
+   - **Máximo de URLs**: Limite de URLs a descobrir (padrão: 1000)
+   
+3. **Iniciar Spider**:
+   - Clique em "▶ Iniciar Spider"
+   - O spider começará a descobrir automaticamente quando você navegar no site
+   
+4. **Navegar no Site**:
+   - Use seu navegador normalmente
+   - O spider analisará automaticamente as respostas HTML
+   - Links, formulários e endpoints serão descobertos
+   
+5. **Visualizar Descobertas**:
+   - **URLs Descobertas**: Lista de todas as URLs encontradas
+   - **Formulários**: Tabela com formulários, métodos e campos de entrada
+   - **Sitemap**: Estrutura do site organizada por host e paths
+   
+6. **Exportar**:
+   - Use o botão "💾 Exportar" para salvar o sitemap em arquivo
+   - Use "📋 Copiar Todas" para copiar as URLs para a área de transferência
+   
+7. **Parar Spider**:
+   - Clique em "⏹ Parar Spider" quando terminar
+   - Use "🗑 Limpar Dados" para resetar os resultados
+
+> 💡 **Dica**: O Spider funciona passivamente analisando as respostas do proxy. Quanto mais você navegar pelo site, mais completo será o mapeamento!
 
 ### 4. Iniciar o Proxy
 
