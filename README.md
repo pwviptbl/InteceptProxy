@@ -15,6 +15,12 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
 - ✅ Persistência de configurações em JSON
 - ✅ Servidor proxy HTTP na porta 8080
 - ✅ **Intercept Manual (Forward/Drop)** - Funcionalidade inspirada no Burp Suite
+- ✅ **Intruder Avançado** 💥 - Ferramenta completa de ataque automatizado:
+  - 4 tipos de ataque (Sniper, Battering Ram, Pitchfork, Cluster Bomb)
+  - Múltiplas posições de payload (§markers§)
+  - Payload processing (URL encode, Base64, MD5, SHA256, prefix/suffix)
+  - Grep extraction (extração de dados via regex)
+  - Resource pool management (controle de threads)
 - ✅ **Scanner de Vulnerabilidades** 🔐 - Detecção automática de:
   - SQL Injection
   - XSS (Cross-Site Scripting)
@@ -138,6 +144,53 @@ Na aba **"Intercept Manual"**, você pode pausar requisições e modificá-las m
 > 💡 **Dica**: Esta funcionalidade é inspirada no Burp Suite e é ideal para testes manuais de segurança e análise de requisições.
 
 Para mais informações sobre o Intercept Manual, veja [docs/INTERCEPT_MANUAL_FEATURE.md](docs/INTERCEPT_MANUAL_FEATURE.md)
+
+### 3.1.5. Intruder Avançado (Ataques Automatizados) 💥
+
+Na aba **"💥 Intruder"**, você pode realizar ataques automatizados com múltiplas requisições:
+
+1. **Marcar Posições de Payload**:
+   - Use `§...§` para marcar onde inserir payloads
+   - Exemplo: `GET /login?user=§admin§&pass=§123§`
+   - Selecione texto e clique "📋 Marcar Posições" para facilitar
+
+2. **Escolher Tipo de Ataque**:
+   - **Sniper**: Testa cada posição individualmente (fuzzing)
+   - **Battering Ram**: Mesmo payload em todas as posições
+   - **Pitchfork**: Combina sets em paralelo (credenciais)
+   - **Cluster Bomb**: Todas as combinações possíveis (brute-force)
+
+3. **Configurar Payloads**:
+   - **Payload Set 1**: Arquivo .txt com payloads (obrigatório)
+   - **Payload Set 2**: Arquivo .txt adicional (para Pitchfork/Cluster Bomb)
+
+4. **Processamento** (opcional):
+   - ✓ URL Encode, Base64, MD5 Hash
+   - Prefix/Suffix para adicionar texto aos payloads
+
+5. **Grep Extraction** (opcional):
+   - Use regex para extrair dados das respostas
+   - Exemplo: `token=([a-zA-Z0-9]+)` para capturar tokens
+
+6. **Iniciar Ataque**:
+   - Ajuste threads (padrão: 10)
+   - Clique "▶ Iniciar Ataque"
+   - Monitore resultados em tempo real
+
+**Exemplo de Uso - Brute Force**:
+```
+POST /login HTTP/1.1
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+
+username=§admin§&password=§password§
+```
+
+Com Pitchfork e dois arquivos (users.txt e passwords.txt), você testa combinações específicas.
+
+> 💡 **Dica**: O Intruder é poderoso! Use com responsabilidade e apenas em ambientes autorizados.
+
+Para mais informações detalhadas, veja [docs/INTRUDER_GUIDE.md](docs/INTRUDER_GUIDE.md)
 
 ### 3.2. Spider/Crawler (Descoberta Automática)
 
