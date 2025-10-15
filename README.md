@@ -33,6 +33,11 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
   - Formulários e seus campos
   - Estrutura do site (sitemap)
   - Parâmetros de query strings
+- ✅ **Comparador de Requisições** 🔀 - Comparação lado a lado:
+  - Diff visual de requisições e respostas
+  - Highlighting automático de diferenças
+  - Útil para encontrar tokens CSRF e mudanças sutis
+  - Algoritmo inteligente usando difflib
 - ✅ Histórico de requisições com filtros avançados
 - ✅ Visualização detalhada de Request/Response
 - ✅ Filtros por método HTTP e regex de domínio
