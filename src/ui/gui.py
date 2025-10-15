@@ -95,16 +95,16 @@ class ProxyGUI:
         # Tab 5: Sender
         self.setup_sender_tab()
 
-        # Tab 6: Decoder
+        # Tab 7: Decoder
         self.setup_decoder_tab()
 
-        # Tab 7: Cookie Jar
+        # Tab 8: Cookie Jar
         self.setup_cookie_jar_tab()
 
-        # Tab 8: Scanner de Vulnerabilidades
+        # Tab 9: Scanner de Vulnerabilidades
         self.setup_scanner_tab()
         
-        # Tab 9: Spider/Crawler
+        # Tab 10: Spider/Crawler
         self.setup_spider_tab()
 
     def setup_rules_tab(self):
@@ -1136,6 +1136,315 @@ class ProxyGUI:
 
         self.decoder_output_text.delete("1.0", tk.END)
         self.decoder_output_text.insert("1.0", result)
+
+    def setup_intruder_tab(self):
+        """Configura a aba de Intruder (Sender Avançado)."""
+        intruder_tab = ttk.Frame(self.notebook)
+        self.notebook.add(intruder_tab, text="💥 Intruder")
+
+        # Frame superior para configuração
+        config_frame = ttk.LabelFrame(intruder_tab, text="Configuração de Ataque", padding=10)
+        config_frame.pack(fill="x", padx=10, pady=5)
+
+        # Row 0: Attack Type Selection
+        ttk.Label(config_frame, text="Tipo de Ataque:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        self.intruder_attack_type = tk.StringVar(value="sniper")
+        attack_types = [
+            ("Sniper", "sniper"),
+            ("Battering Ram", "battering_ram"),
+            ("Pitchfork", "pitchfork"),
+            ("Cluster Bomb", "cluster_bomb")
+        ]
+        attack_frame = ttk.Frame(config_frame)
+        attack_frame.grid(row=0, column=1, columnspan=3, sticky="w", padx=5, pady=5)
+        for text, value in attack_types:
+            ttk.Radiobutton(attack_frame, text=text, value=value, variable=self.intruder_attack_type).pack(side="left", padx=5)
+        
+        # Tooltips for attack types
+        Tooltip(attack_frame, 
+                "Sniper: Um payload set, testa cada posição individualmente\n"
+                "Battering Ram: Um payload set, usa o mesmo valor em todas as posições\n"
+                "Pitchfork: Múltiplos sets, itera em paralelo\n"
+                "Cluster Bomb: Múltiplos sets, todas as combinações possíveis")
+
+        # Row 1: Payload Files
+        ttk.Label(config_frame, text="Payload Set 1:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        self.intruder_payload_file1 = tk.StringVar()
+        file1_entry = ttk.Entry(config_frame, textvariable=self.intruder_payload_file1, width=40, state="readonly")
+        file1_entry.grid(row=1, column=1, sticky="we", padx=5, pady=5)
+        ttk.Button(config_frame, text="📂", command=lambda: self.select_intruder_payload_file(1), width=3).grid(row=1, column=2, padx=2)
+
+        ttk.Label(config_frame, text="Payload Set 2:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        self.intruder_payload_file2 = tk.StringVar()
+        file2_entry = ttk.Entry(config_frame, textvariable=self.intruder_payload_file2, width=40, state="readonly")
+        file2_entry.grid(row=2, column=1, sticky="we", padx=5, pady=5)
+        ttk.Button(config_frame, text="📂", command=lambda: self.select_intruder_payload_file(2), width=3).grid(row=2, column=2, padx=2)
+        Tooltip(file2_entry, "Opcional. Use para Pitchfork e Cluster Bomb")
+
+        # Row 3: Payload Processing
+        ttk.Label(config_frame, text="Processamento:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        proc_frame = ttk.Frame(config_frame)
+        proc_frame.grid(row=3, column=1, columnspan=2, sticky="we", padx=5, pady=5)
+        
+        # Checkboxes for payload processing
+        self.intruder_proc_url_encode = tk.BooleanVar()
+        self.intruder_proc_base64 = tk.BooleanVar()
+        self.intruder_proc_md5 = tk.BooleanVar()
+        
+        ttk.Checkbutton(proc_frame, text="URL Encode", variable=self.intruder_proc_url_encode).pack(side="left", padx=2)
+        ttk.Checkbutton(proc_frame, text="Base64", variable=self.intruder_proc_base64).pack(side="left", padx=2)
+        ttk.Checkbutton(proc_frame, text="MD5 Hash", variable=self.intruder_proc_md5).pack(side="left", padx=2)
+        
+        # Prefix/Suffix
+        prefix_suffix_frame = ttk.Frame(config_frame)
+        prefix_suffix_frame.grid(row=4, column=1, columnspan=2, sticky="we", padx=5, pady=5)
+        ttk.Label(prefix_suffix_frame, text="Prefix:").pack(side="left", padx=2)
+        self.intruder_prefix = ttk.Entry(prefix_suffix_frame, width=15)
+        self.intruder_prefix.pack(side="left", padx=2)
+        ttk.Label(prefix_suffix_frame, text="Suffix:").pack(side="left", padx=5)
+        self.intruder_suffix = ttk.Entry(prefix_suffix_frame, width=15)
+        self.intruder_suffix.pack(side="left", padx=2)
+
+        # Row 5: Grep Extraction
+        ttk.Label(config_frame, text="Grep (Regex):").grid(row=5, column=0, sticky="w", padx=5, pady=5)
+        self.intruder_grep_pattern = ttk.Entry(config_frame, width=40)
+        self.intruder_grep_pattern.grid(row=5, column=1, sticky="we", padx=5, pady=5)
+        Tooltip(self.intruder_grep_pattern, "Regex para extrair dados das respostas. Ex: token=([a-zA-Z0-9]+)")
+
+        # Row 6: Threads
+        ttk.Label(config_frame, text="Threads:").grid(row=6, column=0, sticky="w", padx=5, pady=5)
+        self.intruder_threads = ttk.Spinbox(config_frame, from_=1, to=100, width=10)
+        self.intruder_threads.set("10")
+        self.intruder_threads.grid(row=6, column=1, sticky="w", padx=5, pady=5)
+
+        # Row 7: Action Buttons
+        button_frame = ttk.Frame(config_frame)
+        button_frame.grid(row=7, column=0, columnspan=3, pady=10)
+        ttk.Button(button_frame, text="▶ Iniciar Ataque", command=self.start_intruder).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="📋 Marcar Posições", command=self.mark_payload_positions).pack(side="left", padx=5)
+        Tooltip(button_frame, "Use §...§ para marcar posições de payload na requisição")
+
+        # Request Frame
+        request_frame = ttk.LabelFrame(intruder_tab, text="Request Base (use §...§ para marcar posições)", padding=5)
+        request_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Add a text widget with scrollbar
+        self.intruder_request_text = scrolledtext.ScrolledText(request_frame, wrap=tk.WORD, height=10)
+        self.intruder_request_text.pack(fill="both", expand=True)
+        
+        # Example text
+        example = (
+            "GET /login?username=§admin§&password=§pass123§ HTTP/1.1\n"
+            "Host: example.com\n"
+            "User-Agent: Mozilla/5.0\n\n"
+        )
+        self.intruder_request_text.insert("1.0", example)
+
+        # Results Frame
+        results_frame = ttk.LabelFrame(intruder_tab, text="Resultados", padding=5)
+        results_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Progress bar
+        self.intruder_progress = ttk.Progressbar(results_frame, orient="horizontal", mode="determinate")
+        self.intruder_progress.pack(fill="x", pady=5)
+
+        # Results table
+        columns = ('Payload(s)', 'Status', 'Length', 'Extracted', 'URL')
+        self.intruder_results_tree = ttk.Treeview(results_frame, columns=columns, show='headings', height=10)
+        
+        self.intruder_results_tree.heading('Payload(s)', text='Payload(s)')
+        self.intruder_results_tree.heading('Status', text='Status')
+        self.intruder_results_tree.heading('Length', text='Length')
+        self.intruder_results_tree.heading('Extracted', text='Extracted')
+        self.intruder_results_tree.heading('URL', text='URL')
+        
+        self.intruder_results_tree.column('Payload(s)', width=200)
+        self.intruder_results_tree.column('Status', width=80, anchor="center")
+        self.intruder_results_tree.column('Length', width=80, anchor="center")
+        self.intruder_results_tree.column('Extracted', width=150)
+        self.intruder_results_tree.column('URL', width=300)
+        
+        # Color tags
+        self.intruder_results_tree.tag_configure('success', foreground='green')
+        self.intruder_results_tree.tag_configure('failure', foreground='red')
+        
+        self.intruder_results_tree.pack(side="left", fill="both", expand=True)
+        
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=self.intruder_results_tree.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.intruder_results_tree.configure(yscrollcommand=scrollbar.set)
+
+        # Clear button
+        ttk.Button(results_frame, text="🗑 Limpar Resultados", command=self.clear_intruder_results).pack(pady=5)
+
+    def select_intruder_payload_file(self, set_number):
+        """Seleciona arquivo de payload para o Intruder"""
+        from tkinter import filedialog
+        filepath = filedialog.askopenfilename(
+            title=f"Selecione Payload Set {set_number}",
+            filetypes=(("Text files", "*.txt"), ("All files", "*.*"))
+        )
+        if filepath:
+            if set_number == 1:
+                self.intruder_payload_file1.set(filepath)
+            elif set_number == 2:
+                self.intruder_payload_file2.set(filepath)
+
+    def mark_payload_positions(self):
+        """Ajuda o usuário a marcar posições de payload"""
+        try:
+            # Get current selection
+            selection = self.intruder_request_text.tag_ranges("sel")
+            if selection:
+                start_idx = selection[0]
+                end_idx = selection[1]
+                selected_text = self.intruder_request_text.get(start_idx, end_idx)
+                
+                # Replace with marked version
+                marked_text = f"§{selected_text}§"
+                self.intruder_request_text.delete(start_idx, end_idx)
+                self.intruder_request_text.insert(start_idx, marked_text)
+                
+                messagebox.showinfo("Sucesso", f"Posição marcada: §{selected_text}§")
+            else:
+                messagebox.showinfo("Info", 
+                    "Selecione o texto que deseja marcar como posição de payload,\n"
+                    "depois clique em 'Marcar Posições'.\n\n"
+                    "Ou digite manualmente usando §...§ ao redor do valor.")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao marcar posição: {e}")
+
+    def start_intruder(self):
+        """Inicia o ataque do Intruder"""
+        from src.core.advanced_sender import AdvancedSender, load_payloads_from_file
+        
+        # Get request
+        raw_request = self.intruder_request_text.get("1.0", tk.END).strip()
+        if not raw_request:
+            messagebox.showwarning("Aviso", "A requisição está vazia.")
+            return
+        
+        # Check for payload positions
+        if '§' not in raw_request:
+            messagebox.showwarning("Aviso", 
+                "Nenhuma posição de payload marcada!\n\n"
+                "Use §...§ para marcar onde os payloads devem ser inseridos.\n"
+                "Exemplo: GET /test?id=§1§")
+            return
+        
+        # Inject cookies
+        raw_request = self._inject_jar_cookies(raw_request)
+        
+        # Load payload sets
+        payload_file1 = self.intruder_payload_file1.get().strip()
+        if not payload_file1:
+            messagebox.showwarning("Aviso", "Selecione pelo menos o Payload Set 1.")
+            return
+        
+        payload_sets = [load_payloads_from_file(payload_file1)]
+        
+        payload_file2 = self.intruder_payload_file2.get().strip()
+        if payload_file2:
+            payload_sets.append(load_payloads_from_file(payload_file2))
+        
+        # Build processor chain
+        processors_list = []
+        for _ in range(len(payload_sets)):
+            proc_chain = []
+            
+            # Prefix
+            prefix = self.intruder_prefix.get().strip()
+            if prefix:
+                proc_chain.append({'type': 'prefix', 'value': prefix})
+            
+            # Suffix  
+            suffix = self.intruder_suffix.get().strip()
+            if suffix:
+                proc_chain.append({'type': 'suffix', 'value': suffix})
+            
+            # Encoding/Hashing
+            if self.intruder_proc_url_encode.get():
+                proc_chain.append({'type': 'url_encode'})
+            if self.intruder_proc_base64.get():
+                proc_chain.append({'type': 'base64'})
+            if self.intruder_proc_md5.get():
+                proc_chain.append({'type': 'md5'})
+            
+            processors_list.append(proc_chain)
+        
+        # Get grep pattern
+        grep_patterns = []
+        grep_pattern = self.intruder_grep_pattern.get().strip()
+        if grep_pattern:
+            grep_patterns.append(grep_pattern)
+        
+        # Get attack type
+        attack_type = self.intruder_attack_type.get()
+        
+        # Get threads
+        threads = int(self.intruder_threads.get())
+        
+        # Clear results
+        self.clear_intruder_results()
+        
+        # Create sender
+        sender = AdvancedSender(
+            raw_request=raw_request,
+            attack_type=attack_type,
+            payload_sets=payload_sets,
+            processors=processors_list,
+            grep_patterns=grep_patterns,
+            num_threads=threads
+        )
+        
+        # Start attack in thread
+        thread = threading.Thread(
+            target=sender.run_attack,
+            args=(self.update_intruder_results,),
+            daemon=True
+        )
+        thread.start()
+        
+        messagebox.showinfo("Iniciado", 
+            f"Ataque {attack_type} iniciado!\n"
+            f"Acompanhe os resultados na tabela abaixo.")
+
+    def update_intruder_results(self, message):
+        """Atualiza resultados do Intruder (thread-safe)"""
+        def _update():
+            msg_type = message.get('type')
+            
+            if msg_type == 'progress_update':
+                self.intruder_progress['value'] = message.get('value', 0)
+            
+            elif msg_type == 'result':
+                data = message.get('data', {})
+                payloads = ', '.join(str(p) for p in data.get('payloads', []))
+                status = data.get('status', 'Error')
+                length = data.get('length', 0)
+                extracted = ', '.join(data.get('extracted', []))
+                url = data.get('url', 'N/A')
+                
+                tag = 'success' if data.get('success', False) else 'failure'
+                
+                self.intruder_results_tree.insert(
+                    '', 'end',
+                    values=(payloads, status, length, extracted, url),
+                    tags=(tag,)
+                )
+            
+            elif msg_type == 'progress_done':
+                self.intruder_progress['value'] = 100
+                messagebox.showinfo("Concluído", "Ataque finalizado!")
+        
+        self.root.after(0, _update)
+
+    def clear_intruder_results(self):
+        """Limpa resultados do Intruder"""
+        for item in self.intruder_results_tree.get_children():
+            self.intruder_results_tree.delete(item)
+        self.intruder_progress['value'] = 0
 
     def setup_decoder_tab(self):
         """Configura a aba da ferramenta Decoder."""
