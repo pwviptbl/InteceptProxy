@@ -388,7 +388,11 @@ class AdvancedSender:
             if not host:
                 raise ValueError("Header 'Host' not found")
             
-            scheme = "https"
+            # Use HTTP for local hosts, HTTPS for others
+            if host.startswith(('127.0.0.1', 'localhost', '192.168.', '10.', '172.')):
+                scheme = "http"
+            else:
+                scheme = "https"
             full_url = f"{scheme}://{host}{path}"
             
             headers_to_send = {k: v for k, v in headers.items() if k.lower() not in ['host', 'content-length']}

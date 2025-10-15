@@ -77,6 +77,11 @@ class InterceptAddon:
 
     def request(self, flow: http.HTTPFlow) -> None:
         """Intercepta requisições HTTP"""
+        # Força upstream HTTP para servidores locais que não suportam TLS
+        if flow.request.pretty_host in ['192.168.1.208:8081', '192.168.1.208']:
+            flow.server_conn.scheme = 'http'
+            log.info(f"Forçando upstream HTTP para {flow.request.pretty_host}")
+
         # Se o proxy estiver pausado, ignora todas as regras e o histórico
         if self.config.is_paused():
             return

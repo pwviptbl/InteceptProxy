@@ -45,7 +45,11 @@ def send_from_raw(raw_request: str, param_name: str = None, new_value: str = Non
         host = headers.get("Host")
         if not host:
             raise ValueError("Header 'Host' não encontrado.")
-        scheme = "https"  # Assume HTTPS
+        # Use HTTP for local hosts, HTTPS for others
+        if host.startswith(('127.0.0.1', 'localhost', '192.168.', '10.', '172.')):
+            scheme = "http"
+        else:
+            scheme = "https"
         base_url = f"{scheme}://{host}"
 
         # 4. Substitute parameter
