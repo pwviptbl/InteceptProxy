@@ -15,6 +15,11 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
 - ✅ Persistência de configurações em JSON
 - ✅ Servidor proxy HTTP na porta 8080
 - ✅ **Intercept Manual (Forward/Drop)** - Funcionalidade inspirada no Burp Suite
+- ✅ **WebSocket Support** 🔌 - Interceptação e monitoramento de WebSocket:
+  - Listagem de conexões WebSocket ativas e fechadas
+  - Visualização de mensagens enviadas/recebidas
+  - Suporte a mensagens de texto e binárias
+  - Histórico completo por conexão
 - ✅ **Intruder Avançado** 💥 - Ferramenta completa de ataque automatizado:
   - 4 tipos de ataque (Sniper, Battering Ram, Pitchfork, Cluster Bomb)
   - Múltiplas posições de payload (§markers§)

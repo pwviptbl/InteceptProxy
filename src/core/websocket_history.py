@@ -30,11 +30,16 @@ class WebSocketHistory:
         if flow_id not in self.messages:
             return
 
+        # Tenta decodificar como texto UTF-8 válido
         try:
-            # Tenta decodificar como texto
-            content = message.decode('utf-8', errors='replace')
-            is_binary = False
-        except:
+            content = message.decode('utf-8')
+            # Verifica se contém caracteres não-imprimíveis (exceto espaços em branco comuns)
+            is_binary = any(ord(c) < 32 and c not in '\n\r\t' for c in content)
+            if is_binary:
+                # Se for binário, usa representação hexadecimal
+                content = message.hex()
+        except UnicodeDecodeError:
+            # Não é UTF-8 válido, trata como binário
             content = message.hex()
             is_binary = True
 

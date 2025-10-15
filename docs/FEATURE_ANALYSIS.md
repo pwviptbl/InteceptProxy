@@ -54,7 +54,15 @@
 - ✅ Cookie Jar customizável para forçar cookies
 - ✅ Injeção automática no Repeater
 
-#### 8. **Interface e Usabilidade**
+#### 8. **WebSocket Support** 🔌 **IMPLEMENTADO**
+- ✅ Interceptação de conexões WebSocket
+- ✅ Listagem de todas as conexões WebSocket ativas e fechadas
+- ✅ Visualização de mensagens enviadas e recebidas
+- ✅ Suporte a mensagens de texto e binárias
+- ✅ Histórico de mensagens por conexão
+- ✅ Interface gráfica dedicada para WebSocket
+
+#### 9. **Interface e Usabilidade**
 - ✅ GUI com Tkinter (tema moderno)
 - ✅ CLI para operações headless
 - ✅ Tooltips informativos
@@ -269,15 +277,16 @@
 **Status:** ✅ Implementado em src/core/advanced_sender.py com interface na aba Intruder 💥
 **Esforço:** Alto
 
-#### 7. **WebSocket Support** 🔌
+#### 7. **WebSocket Support** 🔌 **IMPLEMENTADO**
 **Descrição:** Interceptar e modificar WebSocket
-- Listar conexões WebSocket
-- Ver mensagens enviadas/recebidas
-- Modificar mensagens
-- Reenviar mensagens
+- ✅ Listar conexões WebSocket
+- ✅ Ver mensagens enviadas/recebidas
+- ⚠️ Modificar mensagens (funcionalidade básica implementada, edição em desenvolvimento)
+- ⚠️ Reenviar mensagens (em desenvolvimento)
 
 **Benefício:** Aplicações modernas usam muito WebSocket
 **Esforço:** Médio a Alto
+**Status:** ✅ Implementado em src/core/websocket_history.py e src/core/addon.py com interface na aba WebSocket 🔌
 
 #### 8. **Match & Replace Avançado** 🔄
 **Descrição:** Regras de modificação mais poderosas
