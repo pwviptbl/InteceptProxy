@@ -65,3 +65,26 @@ class RequestHistory:
             return self.history[first_new_index:]
         else:
             return []
+
+    def get_entry_by_id(self, entry_id: int):
+        """Retorna uma entrada do histórico pelo seu ID."""
+        for entry in reversed(self.history):
+            if entry['id'] == entry_id:
+                return entry
+        return None
+
+    def add_vulnerabilities_to_entry(self, entry_id: int, new_vulnerabilities: list):
+        """Adiciona uma lista de vulnerabilidades a uma entrada existente no histórico."""
+        entry = self.get_entry_by_id(entry_id)
+        if entry:
+            # Garante que a lista de vulnerabilidades exista
+            if 'vulnerabilities' not in entry or not isinstance(entry['vulnerabilities'], list):
+                entry['vulnerabilities'] = []
+
+            # Adiciona apenas vulnerabilidades que ainda não foram reportadas
+            existing_vulns_str = {str(v) for v in entry['vulnerabilities']}
+            for vuln in new_vulnerabilities:
+                if str(vuln) not in existing_vulns_str:
+                    entry['vulnerabilities'].append(vuln)
+            return True
+        return False

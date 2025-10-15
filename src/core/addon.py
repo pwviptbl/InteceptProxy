@@ -8,6 +8,7 @@ from .logger_config import log
 from .scanner import VulnerabilityScanner
 from .spider import Spider
 from .websocket_history import WebSocketHistory
+from .active_scanner import ActiveScanner
 
 
 class InterceptAddon:
@@ -17,9 +18,39 @@ class InterceptAddon:
         self.config = config
         self.history = history
         self.cookie_manager = cookie_manager
-        self.scanner = VulnerabilityScanner()  # Inicializa o scanner
-        self.spider = spider  # Adiciona o spider
-        self.websocket_history = websocket_history  # Adiciona histórico de WebSocket
+        self.passive_scanner = VulnerabilityScanner()  # Scanner passivo
+        self.active_scanner = ActiveScanner()  # Scanner ativo
+        self.spider = spider
+        self.websocket_history = websocket_history
+
+    def run_active_scan_on_request(self, request_id: int):
+        """
+        Executa o scanner ativo em uma requisição específica do histórico.
+        """
+        if not self.history:
+            log.error("Histórico não está disponível para a varredura ativa.")
+            return
+
+        entry = self.history.get_entry_by_id(request_id)
+        if not entry:
+            log.error(f"Requisição com ID {request_id} não encontrada no histórico.")
+            return
+
+        # Prepara a requisição base para o scanner
+        base_request = {
+            'method': entry['method'],
+            'url': entry['url'],
+            'headers': entry['request_headers'],
+            'body': entry['request_body'],
+        }
+
+        # Executa o scan
+        vulnerabilities = self.active_scanner.scan_request(base_request)
+
+        # Adiciona as vulnerabilidades encontradas ao histórico
+        if vulnerabilities:
+            self.history.add_vulnerabilities_to_entry(request_id, vulnerabilities)
+            log.info(f"{len(vulnerabilities)} novas vulnerabilidades ativas adicionadas ao histórico para o ID {request_id}.")
 
     @staticmethod
     def _split_host_and_path(raw_host: str):
@@ -140,7 +171,7 @@ class InterceptAddon:
         
         # Escaneia a resposta em busca de vulnerabilidades
         vulnerabilities = []
-        if self.scanner and flow.response:
+        if self.passive_scanner and flow.response:
             request_data = {
                 'method': flow.request.method,
                 'url': flow.request.pretty_url,
@@ -153,7 +184,7 @@ class InterceptAddon:
                 'body': flow.response.content.decode('utf-8', errors='ignore') if flow.response.content else '',
             }
             
-            vulnerabilities = self.scanner.scan_response(request_data, response_data)
+            vulnerabilities = self.passive_scanner.scan_response(request_data, response_data)
             
             # Preenche URL e método nas vulnerabilidades
             for vuln in vulnerabilities:
@@ -184,21 +215,21 @@ class InterceptAddon:
             response_body = flow.response.content.decode('utf-8', errors='ignore') if flow.response.content else ''
             self.spider.process_response(flow.request.pretty_url, response_body, content_type)
 
-    def websocket_start(self, flow: websocket.WebSocketFlow) -> None:
+    def websocket_start(self, flow: http.HTTPFlow) -> None:
         """Chamado quando uma conexão WebSocket é estabelecida"""
-        if self.websocket_history is not None:
+        if self.websocket_history is not None and flow.websocket:
             flow_id = str(id(flow))
             url = flow.request.pretty_url
             host = flow.request.pretty_host
             self.websocket_history.add_connection(flow_id, url, host)
             log.info(f"WebSocket conectado: {url}")
 
-    def websocket_message(self, flow: websocket.WebSocketFlow) -> None:
+    def websocket_message(self, flow: http.HTTPFlow) -> None:
         """Chamado quando uma mensagem WebSocket é recebida"""
-        if self.websocket_history is not None and flow.messages:
+        if self.websocket_history is not None and flow.websocket:
             flow_id = str(id(flow))
             # Processa a última mensagem
-            message = flow.messages[-1]
+            message = flow.websocket.messages[-1]
             from_client = message.from_client
             content = message.content
             
@@ -208,9 +239,9 @@ class InterceptAddon:
             direction = "Cliente → Servidor" if from_client else "Servidor → Cliente"
             log.info(f"WebSocket mensagem ({direction}): {len(content)} bytes em {flow.request.pretty_url}")
 
-    def websocket_end(self, flow: websocket.WebSocketFlow) -> None:
+    def websocket_end(self, flow: http.HTTPFlow) -> None:
         """Chamado quando uma conexão WebSocket é fechada"""
-        if self.websocket_history is not None:
+        if self.websocket_history is not None and flow.websocket:
             flow_id = str(id(flow))
             self.websocket_history.close_connection(flow_id)
             log.info(f"WebSocket desconectado: {flow.request.pretty_url}")

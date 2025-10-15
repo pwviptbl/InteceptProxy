@@ -17,6 +17,44 @@ def cli():
     pass
 
 
+# Para que o comando scan funcione, precisamos de acesso ao addon e ao histórico.
+# Em um cenário real, isso poderia vir de um estado compartilhado ou de um proxy em execução.
+# Aqui, vamos instanciá-los para permitir a chamada.
+config_instance = InterceptConfig()
+from core.history import RequestHistory
+history_instance = RequestHistory()
+from core.addon import InterceptAddon
+addon_instance = InterceptAddon(config_instance, history_instance)
+
+
+@cli.command('scan')
+@click.argument('request_id', type=int)
+def scan_request(request_id):
+    """
+    Executa o Scanner Ativo em uma requisição do histórico.
+
+    Nota: O proxy precisa ter capturado requisições na sessão atual
+    para que o histórico contenha itens a serem escaneados.
+    """
+    click.echo(f"Executando varredura ativa na requisição ID: {request_id}...")
+
+    # Simula a captura de alguns dados para que o histórico não esteja vazio
+    if not history_instance.get_history():
+        click.echo(click.style("Histórico vazio. O proxy precisa capturar tráfego primeiro.", fg="yellow"))
+        click.echo("Para fins de demonstração, o histórico não é persistido entre execuções.")
+        return
+
+    addon_instance.run_active_scan_on_request(request_id)
+
+    entry = history_instance.get_entry_by_id(request_id)
+    if entry and entry['vulnerabilities']:
+        click.echo(click.style("✓ Varredura concluída. Novas vulnerabilidades encontradas:", fg="green"))
+        for vuln in entry['vulnerabilities']:
+            click.echo(f"  - [{vuln['severity']}] {vuln['type']} em {vuln['description']}")
+    else:
+        click.echo(click.style("✓ Varredura concluída. Nenhuma nova vulnerabilidade encontrada.", fg="green"))
+
+
 @cli.command('list')
 def list_rules():
     """Lista todas as regras de interceptação configuradas."""
