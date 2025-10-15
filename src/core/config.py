@@ -10,6 +10,7 @@ class InterceptConfig:
     def __init__(self, config_file="intercept_config.json"):
         self.config_file = config_file
         self.rules = []
+        self.port = 8080  # Porta padrão
         self.paused = False
         self.intercept_enabled = False
         self.intercept_queue = queue.Queue()
@@ -24,17 +25,20 @@ class InterceptConfig:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.rules = data.get('rules', [])
+                    self.port = data.get('port', 8080)
             except Exception as e:
                 print(f"Erro ao carregar config: {e}")
                 self.rules = []
+                self.port = 8080
         else:
             self.rules = []
+            self.port = 8080
 
     def save_config(self):
         """Salva configuração no arquivo"""
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump({'rules': self.rules}, f, indent=2, ensure_ascii=False)
+                json.dump({'rules': self.rules, 'port': self.port}, f, indent=2, ensure_ascii=False)
             return True
         except Exception as e:
             print(f"Erro ao salvar config: {e}")
@@ -132,3 +136,25 @@ class InterceptConfig:
                 self.intercept_response_queue.get_nowait()
             except queue.Empty:
                 break
+
+    def get_port(self):
+        """Retorna a porta configurada."""
+        return self.port
+
+    def set_port(self, port):
+        """Define a porta e salva a configuração."""
+        if not isinstance(port, int):
+            try:
+                port = int(port)
+            except (ValueError, TypeError):
+                return False, "Porta deve ser um número inteiro."
+        
+        if port < 1 or port > 65535:
+            return False, "Porta deve estar entre 1 e 65535."
+        
+        self.port = port
+        if self.save_config():
+            return True, f"Porta configurada para {port}"
+        else:
+            return False, "Erro ao salvar a configuração."
+

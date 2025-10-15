@@ -295,7 +295,8 @@ class AdvancedSender:
                  payload_sets: List[List[str]] = None,
                  processors: List[List[Dict[str, Any]]] = None,
                  grep_patterns: List[str] = None,
-                 num_threads: int = 10):
+                 num_threads: int = 10,
+                 proxy_port: int = 8080):
         """
         Args:
             raw_request: Base request with §markers§ for payload positions
@@ -304,6 +305,7 @@ class AdvancedSender:
             processors: List of processor chains (one per payload set)
             grep_patterns: Regex patterns to extract from responses
             num_threads: Number of concurrent threads
+            proxy_port: Port for the proxy server
         """
         self.raw_request = raw_request
         self.attack_type = attack_type
@@ -311,6 +313,7 @@ class AdvancedSender:
         self.processors = processors or [[]]
         self.grep_extractor = GrepExtractor(grep_patterns or [])
         self.num_threads = num_threads
+        self.proxy_port = proxy_port
         self.num_positions = PayloadPositionParser.count_positions(raw_request)
         
         # Store original values for Sniper attack
@@ -389,7 +392,7 @@ class AdvancedSender:
             full_url = f"{scheme}://{host}{path}"
             
             headers_to_send = {k: v for k, v in headers.items() if k.lower() not in ['host', 'content-length']}
-            proxies = {"http": "http://127.0.0.1:8080", "https": "http://127.0.0.1:8080"}
+            proxies = {"http": f"http://127.0.0.1:{self.proxy_port}", "https": f"http://127.0.0.1:{self.proxy_port}"}
             
             response = requests.request(
                 method=method,

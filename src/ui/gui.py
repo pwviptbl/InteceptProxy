@@ -87,7 +87,14 @@ class ProxyGUI:
         self.pause_button = ttk.Button(control_frame, text="Pausar", command=self.toggle_pause_proxy, state="disabled")
         self.pause_button.pack(side="left", padx=5)
 
-        ttk.Label(control_frame, text="Porta: 8080").pack(side="left", padx=5)
+        # Porta configurável
+        ttk.Label(control_frame, text="Porta:").pack(side="left", padx=(20, 2))
+        self.port_entry = ttk.Entry(control_frame, width=6)
+        self.port_entry.insert(0, str(self.config.get_port()))
+        self.port_entry.pack(side="left", padx=2)
+        
+        self.port_save_button = ttk.Button(control_frame, text="Salvar Porta", command=self.save_port)
+        self.port_save_button.pack(side="left", padx=5)
 
         # Notebook (Tabs)
         self.notebook = ttk.Notebook(self.root)
@@ -212,10 +219,11 @@ class ProxyGUI:
         info_frame = ttk.LabelFrame(rules_tab, text="Instruções", padding=10)
         info_frame.pack(fill="x", padx=10, pady=5)
 
-        info_text = """1. Configure o navegador para usar o proxy: localhost:8080
-2. Adicione regras de interceptação com host, caminho, nome do parâmetro e valor
-3. Inicie o proxy
-4. Navegue normalmente - os parâmetros configurados serão substituídos automaticamente"""
+        info_text = """1. Configure a porta desejada (padrão: 8080) e clique em "Salvar Porta"
+2. Configure o navegador para usar o proxy: localhost:<porta configurada>
+3. Adicione regras de interceptação com host, caminho, nome do parâmetro e valor
+4. Inicie o proxy
+5. Navegue normalmente - os parâmetros configurados serão substituídos automaticamente"""
 
         ttk.Label(info_frame, text=info_text, justify="left").pack()
 
@@ -506,7 +514,8 @@ class ProxyGUI:
 
             async def runner():
                 try:
-                    proxy_options = options.Options(listen_host='127.0.0.1', listen_port=8080)
+                    port = self.config.get_port()
+                    proxy_options = options.Options(listen_host='127.0.0.1', listen_port=port)
                     master = DumpMaster(proxy_options, with_termlog=False, with_dumper=False)
                     master.addons.add(InterceptAddon(self.config, self.history, self.cookie_manager, self.spider, self.websocket_history))
                     self.proxy_master = master
@@ -543,11 +552,12 @@ class ProxyGUI:
         self.stop_button.config(state="normal")
         self.pause_button.config(state="normal")
 
+        port = self.config.get_port()
         messagebox.showinfo("Proxy Iniciado",
-                            "Proxy iniciado na porta 8080\n\n"
+                            f"Proxy iniciado na porta {port}\n\n"
                             "Configure seu navegador para usar:\n"
-                            "Host: localhost\n"
-                            "Porta: 8080\n\n"
+                            f"Host: localhost\n"
+                            f"Porta: {port}\n\n"
                             "Para HTTPS, instale o certificado em http://mitm.it")
 
     def stop_proxy(self):
@@ -590,6 +600,24 @@ class ProxyGUI:
             self.status_label.config(text="Status: Executando", foreground="green")
             self.pause_button.config(text="Pausar")
             log.info("Proxy retomado.")
+
+    def save_port(self):
+        """Salva a porta configurada."""
+        if self.proxy_running:
+            messagebox.showwarning("Aviso", "Pare o proxy antes de alterar a porta.")
+            return
+        
+        port_str = self.port_entry.get().strip()
+        success, message = self.config.set_port(port_str)
+        
+        if success:
+            messagebox.showinfo("Sucesso", message)
+            log.info(f"Porta alterada para {self.config.get_port()}")
+        else:
+            messagebox.showerror("Erro", message)
+            # Restaura o valor anterior
+            self.port_entry.delete(0, tk.END)
+            self.port_entry.insert(0, str(self.config.get_port()))
 
     def update_history_list(self):
         """Atualiza a lista de histórico adicionando apenas novas entradas."""
@@ -842,7 +870,7 @@ class ProxyGUI:
         from src.core.sender import send_from_raw
 
         def repeater_thread():
-            response = send_from_raw(raw_request, param_name if manual_value else None, manual_value)
+            response = send_from_raw(raw_request, param_name if manual_value else None, manual_value, self.config.get_port())
             self.root.after(0, self._display_repeater_response, response)
 
         thread = threading.Thread(target=repeater_thread, daemon=True)
@@ -877,7 +905,7 @@ class ProxyGUI:
         # Inicia o envio em uma thread separada
         thread = threading.Thread(
             target=run_sender_from_file,
-            args=(raw_request, file_path, param_name, threads, self.update_sender_results),
+            args=(raw_request, file_path, param_name, threads, self.update_sender_results, self.config.get_port()),
             daemon=True
         )
         thread.start()
@@ -1423,7 +1451,8 @@ class ProxyGUI:
             payload_sets=payload_sets,
             processors=processors_list,
             grep_patterns=grep_patterns,
-            num_threads=threads
+            num_threads=threads,
+            proxy_port=self.config.get_port()
         )
         
         # Start attack in thread

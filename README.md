@@ -13,7 +13,7 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
 - ✅ Suporte para GET (query string) e POST (form data)
 - ✅ Ativar/desativar regras individualmente
 - ✅ Persistência de configurações em JSON
-- ✅ Servidor proxy HTTP na porta 8080
+- ✅ **Porta Configurável** - Escolha a porta do proxy (padrão: 8080)
 - ✅ **Intercept Manual (Forward/Drop)** - Funcionalidade inspirada no Burp Suite
 - ✅ **WebSocket Support** 🔌 - Interceptação e monitoramento de WebSocket:
   - Listagem de conexões WebSocket ativas e fechadas
@@ -126,6 +126,37 @@ Na aba **"Histórico de Requisições"**:
    - Aba "Response": Status, headers e body da resposta
 
 Para mais informações sobre o histórico, veja [docs/HISTORY_GUIDE.md](docs/HISTORY_GUIDE.md)
+
+### 3.0. Configurar a Porta do Proxy
+
+Por padrão, o proxy escuta na porta 8080, mas você pode configurar qualquer porta entre 1 e 65535.
+
+#### Via Interface Gráfica:
+
+1. No frame **"Controle do Proxy"** (parte superior da janela):
+   - Veja o campo **"Porta"** com o valor atual
+   - Digite a nova porta desejada
+   - Clique em **"Salvar Porta"**
+2. **Importante**: O proxy deve estar parado para alterar a porta
+3. A configuração é salva automaticamente e será usada na próxima execução
+
+#### Via Linha de Comando:
+
+```bash
+# Ver a porta configurada
+python cli.py get-port
+
+# Definir uma nova porta
+python cli.py set-port 9090
+
+# Iniciar o proxy com a porta configurada
+python cli.py run
+
+# Ou iniciar com uma porta específica (temporária)
+python cli.py run --port 9090
+```
+
+> 💡 **Dica**: Ao alterar a porta, lembre-se de atualizar também as configurações do seu navegador para usar a nova porta.
 
 ### 3.1. Intercept Manual (Forward/Drop)
 
@@ -240,21 +271,21 @@ Na aba **"🕷️ Spider/Crawler"**, você pode descobrir automaticamente págin
 
 ### 4. Iniciar o Proxy
 
-Clique no botão **"Iniciar Proxy"**. O servidor será iniciado na porta 8080.
+Clique no botão **"Iniciar Proxy"**. O servidor será iniciado na porta configurada (padrão: 8080).
 
 ### 5. Configurar o Navegador
 
 Configure seu navegador para usar o proxy:
 
 - **Host/IP**: `localhost` ou `127.0.0.1`
-- **Porta**: `8080`
+- **Porta**: A porta configurada (padrão: `8080`)
 
 > 💡 Para interceptar tráfego HTTPS é obrigatório instalar o certificado raiz do mitmproxy. Com o proxy em execução, acesse `http://mitm.it`, baixe o certificado para o seu sistema/navegador e instale-o na lista de autoridades confiáveis. Reinicie o navegador depois dessa etapa.
 
 #### Exemplo no Firefox:
 1. Configurações → Geral → Configurações de Rede
 2. Configurar Proxy Manualmente
-3. HTTP Proxy: `localhost`, Porta: `8080`
+3. HTTP Proxy: `localhost`, Porta: a porta configurada (ex: `8080`)
 4. Marcar "Usar este proxy para todos os protocolos"
 
 #### Exemplo no Chrome:
@@ -290,9 +321,22 @@ Use o índice para ativar ou desativar.
 python cli.py toggle 1
 ```
 
+#### Configurar a Porta
+```bash
+# Ver a porta atual
+python cli.py get-port
+
+# Definir uma nova porta
+python cli.py set-port 9090
+```
+
 #### Iniciar o Proxy (Headless)
 ```bash
+# Inicia com a porta configurada
 python cli.py run
+
+# Ou especifica uma porta temporária
+python cli.py run --port 9090
 ```
 
 #### Enviar Requisições em Massa (Sender)
@@ -362,8 +406,9 @@ InteceptProxy/
 ## Observações
 
 - O proxy intercepta apenas requisições HTTP. Para HTTPS, você precisará instalar o certificado CA do mitmproxy no navegador
-- As configurações são salvas automaticamente no arquivo `intercept_config.json`
+- As configurações (regras e porta) são salvas automaticamente no arquivo `intercept_config.json`
 - O proxy mantém todos os parâmetros não configurados com seus valores originais
+- A porta padrão é 8080, mas pode ser alterada a qualquer momento via interface ou CLI
 - **NOVO:** A atividade do proxy (regras aplicadas, erros) é registrada no arquivo `proxy.log` para facilitar a depuração.
 
 ## Solução de Problemas
@@ -375,9 +420,24 @@ Se precisar interceptar HTTPS, instale o certificado do mitmproxy:
 3. Reinicie o navegador para que ele reconheça a nova autoridade
 
 ### Porta já em uso
-Se a porta 8080 já estiver em uso, você pode modificar a linha no código:
-```python
-mitmdump(['-s', __file__, '--listen-port', '8080', ...])
+Se a porta padrão (8080) ou a porta configurada já estiver em uso, você tem algumas opções:
+
+**Opção 1 - Alterar a Porta via Interface Gráfica:**
+1. Certifique-se de que o proxy está parado
+2. No frame "Controle do Proxy", altere o valor no campo "Porta"
+3. Clique em "Salvar Porta"
+4. Inicie o proxy novamente
+
+**Opção 2 - Alterar a Porta via CLI:**
+```bash
+python cli.py set-port 9090
+python cli.py run
+```
+
+**Opção 3 - Usar Porta Temporária (CLI):**
+```bash
+# Usa a porta 9090 apenas para esta execução
+python cli.py run --port 9090
 ```
 
 ## Licença
