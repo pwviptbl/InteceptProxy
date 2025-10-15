@@ -6,16 +6,18 @@ from .cookie_manager import CookieManager
 from .history import RequestHistory
 from .logger_config import log
 from .scanner import VulnerabilityScanner
+from .spider import Spider
 
 
 class InterceptAddon:
     """Addon do mitmproxy para interceptar e modificar requisições"""
 
-    def __init__(self, config: InterceptConfig, history: RequestHistory = None, cookie_manager: CookieManager = None):
+    def __init__(self, config: InterceptConfig, history: RequestHistory = None, cookie_manager: CookieManager = None, spider: Spider = None):
         self.config = config
         self.history = history
         self.cookie_manager = cookie_manager
         self.scanner = VulnerabilityScanner()  # Inicializa o scanner
+        self.spider = spider  # Adiciona o spider
 
     @staticmethod
     def _split_host_and_path(raw_host: str):
@@ -173,3 +175,9 @@ class InterceptAddon:
                 request_headers=dict(flow.request.headers),
                 response_headers=dict(flow.response.headers)
             )
+        
+        # Processa com o Spider se estiver ativo
+        if self.spider is not None and self.spider.is_running() and flow.response:
+            content_type = flow.response.headers.get('content-type', '')
+            response_body = flow.response.content.decode('utf-8', errors='ignore') if flow.response.content else ''
+            self.spider.process_response(flow.request.pretty_url, response_body, content_type)
