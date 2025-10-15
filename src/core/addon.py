@@ -1,4 +1,4 @@
-from mitmproxy import http
+from mitmproxy import http, websocket
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from .config import InterceptConfig
@@ -7,17 +7,19 @@ from .history import RequestHistory
 from .logger_config import log
 from .scanner import VulnerabilityScanner
 from .spider import Spider
+from .websocket_history import WebSocketHistory
 
 
 class InterceptAddon:
     """Addon do mitmproxy para interceptar e modificar requisições"""
 
-    def __init__(self, config: InterceptConfig, history: RequestHistory = None, cookie_manager: CookieManager = None, spider: Spider = None):
+    def __init__(self, config: InterceptConfig, history: RequestHistory = None, cookie_manager: CookieManager = None, spider: Spider = None, websocket_history: WebSocketHistory = None):
         self.config = config
         self.history = history
         self.cookie_manager = cookie_manager
         self.scanner = VulnerabilityScanner()  # Inicializa o scanner
         self.spider = spider  # Adiciona o spider
+        self.websocket_history = websocket_history  # Adiciona histórico de WebSocket
 
     @staticmethod
     def _split_host_and_path(raw_host: str):
@@ -181,3 +183,35 @@ class InterceptAddon:
             content_type = flow.response.headers.get('content-type', '')
             response_body = flow.response.content.decode('utf-8', errors='ignore') if flow.response.content else ''
             self.spider.process_response(flow.request.pretty_url, response_body, content_type)
+
+    def websocket_start(self, flow: websocket.WebSocketFlow) -> None:
+        """Chamado quando uma conexão WebSocket é estabelecida"""
+        if self.websocket_history is not None:
+            flow_id = str(id(flow))
+            url = flow.request.pretty_url
+            host = flow.request.pretty_host
+            self.websocket_history.add_connection(flow_id, url, host)
+            log.info(f"WebSocket conectado: {url}")
+
+    def websocket_message(self, flow: websocket.WebSocketFlow) -> None:
+        """Chamado quando uma mensagem WebSocket é recebida"""
+        if self.websocket_history is not None and flow.messages:
+            flow_id = str(id(flow))
+            # Processa a última mensagem
+            message = flow.messages[-1]
+            from_client = message.from_client
+            content = message.content
+            
+            # Armazena a mensagem no histórico
+            self.websocket_history.add_message(flow_id, content, from_client)
+            
+            direction = "Cliente → Servidor" if from_client else "Servidor → Cliente"
+            log.info(f"WebSocket mensagem ({direction}): {len(content)} bytes em {flow.request.pretty_url}")
+
+    def websocket_end(self, flow: websocket.WebSocketFlow) -> None:
+        """Chamado quando uma conexão WebSocket é fechada"""
+        if self.websocket_history is not None:
+            flow_id = str(id(flow))
+            self.websocket_history.close_connection(flow_id)
+            log.info(f"WebSocket desconectado: {flow.request.pretty_url}")
+

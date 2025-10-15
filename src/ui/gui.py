@@ -17,6 +17,7 @@ from src.core.cookie_manager import CookieManager
 from src.core.history import RequestHistory
 from src.core.logger_config import log
 from src.core.spider import Spider
+from src.core.websocket_history import WebSocketHistory
 from .tooltip import Tooltip
 
 
@@ -29,6 +30,7 @@ class ProxyGUI:
         self.cookie_manager = CookieManager()
         self.cookie_manager.set_ui_callback(self._refresh_cookie_trees)
         self.spider = Spider()  # Inicializa o Spider
+        self.websocket_history = WebSocketHistory()  # Inicializa histórico WebSocket
         self.proxy_thread = None
         self.proxy_running = False
         self.proxy_master = None
@@ -42,6 +44,10 @@ class ProxyGUI:
         # Comparator state
         self.comparator_request_1 = None
         self.comparator_request_2 = None
+        
+        # WebSocket state
+        self.ws_connections_map = {}
+        self.selected_ws_connection = None
 
         # Janela principal com tema
         self.root = ThemedTk(theme="arc")
@@ -59,6 +65,9 @@ class ProxyGUI:
         
         # Atualiza estatísticas do Spider periodicamente
         self.update_spider_stats()
+        
+        # Atualiza lista de WebSocket periodicamente
+        self.update_websocket_list()
 
     def setup_ui(self):
         """Configura a interface gráfica"""
@@ -113,6 +122,9 @@ class ProxyGUI:
         
         # Tab 11: Spider/Crawler
         self.setup_spider_tab()
+        
+        # Tab 12: WebSocket
+        self.setup_websocket_tab()
 
     def setup_rules_tab(self):
         """Configura a aba de regras"""
@@ -496,7 +508,7 @@ class ProxyGUI:
                 try:
                     proxy_options = options.Options(listen_host='127.0.0.1', listen_port=8080)
                     master = DumpMaster(proxy_options, with_termlog=False, with_dumper=False)
-                    master.addons.add(InterceptAddon(self.config, self.history, self.cookie_manager, self.spider))
+                    master.addons.add(InterceptAddon(self.config, self.history, self.cookie_manager, self.spider, self.websocket_history))
                     self.proxy_master = master
                     self.proxy_loop = loop
                     await master.run()
@@ -2302,6 +2314,250 @@ class ProxyGUI:
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao exportar sitemap:\n{str(e)}")
                 log.error(f"Erro ao exportar sitemap: {e}")
+
+    def setup_websocket_tab(self):
+        """Configura a aba de WebSocket"""
+        websocket_tab = ttk.Frame(self.notebook)
+        self.notebook.add(websocket_tab, text="WebSocket 🔌")
+
+        # Frame superior - Lista de Conexões
+        connections_frame = ttk.LabelFrame(websocket_tab, text="Conexões WebSocket", padding=10)
+        connections_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Treeview para listar conexões WebSocket
+        columns = ('ID', 'Host', 'URL', 'Status', 'Mensagens', 'Início')
+        self.ws_connections_tree = ttk.Treeview(connections_frame, columns=columns, show='headings', height=8)
+        
+        self.ws_connections_tree.heading('ID', text='ID')
+        self.ws_connections_tree.heading('Host', text='Host')
+        self.ws_connections_tree.heading('URL', text='URL')
+        self.ws_connections_tree.heading('Status', text='Status')
+        self.ws_connections_tree.heading('Mensagens', text='Mensagens')
+        self.ws_connections_tree.heading('Início', text='Início')
+        
+        self.ws_connections_tree.column('ID', width=50)
+        self.ws_connections_tree.column('Host', width=150)
+        self.ws_connections_tree.column('URL', width=300)
+        self.ws_connections_tree.column('Status', width=80)
+        self.ws_connections_tree.column('Mensagens', width=100)
+        self.ws_connections_tree.column('Início', width=150)
+        
+        self.ws_connections_tree.pack(side="left", fill="both", expand=True)
+        
+        # Scrollbar para conexões
+        scrollbar_conn = ttk.Scrollbar(connections_frame, orient="vertical", command=self.ws_connections_tree.yview)
+        scrollbar_conn.pack(side="right", fill="y")
+        self.ws_connections_tree.configure(yscrollcommand=scrollbar_conn.set)
+        
+        # Bind para seleção de conexão
+        self.ws_connections_tree.bind('<<TreeviewSelect>>', self.on_ws_connection_select)
+
+        # Frame de mensagens
+        messages_frame = ttk.LabelFrame(websocket_tab, text="Mensagens", padding=10)
+        messages_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Treeview para listar mensagens
+        msg_columns = ('Timestamp', 'Direção', 'Tamanho', 'Tipo')
+        self.ws_messages_tree = ttk.Treeview(messages_frame, columns=msg_columns, show='headings', height=8)
+        
+        self.ws_messages_tree.heading('Timestamp', text='Timestamp')
+        self.ws_messages_tree.heading('Direção', text='Direção')
+        self.ws_messages_tree.heading('Tamanho', text='Tamanho')
+        self.ws_messages_tree.heading('Tipo', text='Tipo')
+        
+        self.ws_messages_tree.column('Timestamp', width=150)
+        self.ws_messages_tree.column('Direção', width=150)
+        self.ws_messages_tree.column('Tamanho', width=100)
+        self.ws_messages_tree.column('Tipo', width=100)
+        
+        self.ws_messages_tree.pack(side="left", fill="both", expand=True)
+        
+        # Scrollbar para mensagens
+        scrollbar_msg = ttk.Scrollbar(messages_frame, orient="vertical", command=self.ws_messages_tree.yview)
+        scrollbar_msg.pack(side="right", fill="y")
+        self.ws_messages_tree.configure(yscrollcommand=scrollbar_msg.set)
+        
+        # Bind para seleção de mensagem
+        self.ws_messages_tree.bind('<<TreeviewSelect>>', self.on_ws_message_select)
+
+        # Frame de detalhes da mensagem
+        details_frame = ttk.LabelFrame(websocket_tab, text="Conteúdo da Mensagem", padding=10)
+        details_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self.ws_message_text = scrolledtext.ScrolledText(details_frame, height=10, wrap=tk.WORD)
+        self.ws_message_text.pack(fill="both", expand=True)
+
+        # Frame de botões
+        buttons_frame = ttk.Frame(websocket_tab)
+        buttons_frame.pack(fill="x", padx=10, pady=5)
+
+        ttk.Button(buttons_frame, text="Atualizar Lista", command=self.refresh_websocket_list).pack(side="left", padx=5)
+        ttk.Button(buttons_frame, text="Limpar Histórico", command=self.clear_websocket_history).pack(side="left", padx=5)
+        
+        # Botão de reenviar mensagem (placeholder para implementação futura)
+        self.ws_resend_button = ttk.Button(buttons_frame, text="Reenviar Mensagem", command=self.resend_websocket_message, state="disabled")
+        self.ws_resend_button.pack(side="left", padx=5)
+
+    def update_websocket_list(self):
+        """Atualiza periodicamente a lista de conexões WebSocket"""
+        try:
+            # Limpa árvore de conexões
+            for item in self.ws_connections_tree.get_children():
+                self.ws_connections_tree.delete(item)
+            
+            # Adiciona novas conexões
+            connections = self.websocket_history.get_connections()
+            for conn in connections:
+                flow_id = conn['flow_id']
+                
+                # Formata timestamp
+                start_time = conn['start_time'].strftime('%Y-%m-%d %H:%M:%S')
+                
+                # Adiciona à árvore
+                item_id = self.ws_connections_tree.insert("", "end", 
+                    values=(
+                        conn['id'],
+                        conn['host'],
+                        conn['url'],
+                        conn['status'],
+                        conn['message_count'],
+                        start_time
+                    ))
+                
+                # Mapeia item_id para flow_id
+                self.ws_connections_map[item_id] = flow_id
+        
+        except Exception as e:
+            log.error(f"Erro ao atualizar lista de WebSocket: {e}")
+        
+        # Reagenda para 2 segundos depois
+        self.root.after(2000, self.update_websocket_list)
+
+    def on_ws_connection_select(self, event):
+        """Chamado quando uma conexão WebSocket é selecionada"""
+        selection = self.ws_connections_tree.selection()
+        if not selection:
+            return
+        
+        item_id = selection[0]
+        flow_id = self.ws_connections_map.get(item_id)
+        
+        if flow_id:
+            self.selected_ws_connection = flow_id
+            self.refresh_ws_messages()
+
+    def refresh_ws_messages(self):
+        """Atualiza a lista de mensagens da conexão selecionada"""
+        # Limpa árvore de mensagens
+        for item in self.ws_messages_tree.get_children():
+            self.ws_messages_tree.delete(item)
+        
+        # Limpa conteúdo
+        self.ws_message_text.delete('1.0', tk.END)
+        
+        if not self.selected_ws_connection:
+            return
+        
+        messages = self.websocket_history.get_messages(self.selected_ws_connection)
+        for msg in messages:
+            timestamp = msg['timestamp'].strftime('%H:%M:%S.%f')[:-3]
+            direction = "Cliente → Servidor" if msg['from_client'] else "Servidor → Cliente"
+            msg_type = "Binário" if msg['is_binary'] else "Texto"
+            size = f"{msg['size']} bytes"
+            
+            self.ws_messages_tree.insert("", "end", 
+                values=(timestamp, direction, size, msg_type),
+                tags=(msg,))
+
+    def on_ws_message_select(self, event):
+        """Chamado quando uma mensagem WebSocket é selecionada"""
+        selection = self.ws_messages_tree.selection()
+        if not selection:
+            return
+        
+        item_id = selection[0]
+        item = self.ws_messages_tree.item(item_id)
+        
+        # Pega a mensagem dos valores
+        if not self.selected_ws_connection:
+            return
+        
+        messages = self.websocket_history.get_messages(self.selected_ws_connection)
+        
+        # Encontra o índice da mensagem selecionada
+        children = self.ws_messages_tree.get_children()
+        msg_index = children.index(item_id)
+        
+        if msg_index < len(messages):
+            msg = messages[msg_index]
+            
+            # Mostra o conteúdo
+            self.ws_message_text.delete('1.0', tk.END)
+            
+            if msg['is_binary']:
+                # Mostra representação hexadecimal para mensagens binárias
+                self.ws_message_text.insert('1.0', f"Mensagem Binária ({msg['size']} bytes):\n\n{msg['content']}")
+            else:
+                self.ws_message_text.insert('1.0', msg['content'])
+
+    def refresh_websocket_list(self):
+        """Força atualização da lista de WebSocket"""
+        # Limpa árvore de conexões
+        for item in self.ws_connections_tree.get_children():
+            self.ws_connections_tree.delete(item)
+        
+        # Adiciona novas conexões
+        connections = self.websocket_history.get_connections()
+        for conn in connections:
+            flow_id = conn['flow_id']
+            
+            # Formata timestamp
+            start_time = conn['start_time'].strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Adiciona à árvore
+            item_id = self.ws_connections_tree.insert("", "end", 
+                values=(
+                    conn['id'],
+                    conn['host'],
+                    conn['url'],
+                    conn['status'],
+                    conn['message_count'],
+                    start_time
+                ))
+            
+            # Mapeia item_id para flow_id
+            self.ws_connections_map[item_id] = flow_id
+        
+        # Atualiza mensagens se houver conexão selecionada
+        if self.selected_ws_connection:
+            self.refresh_ws_messages()
+        
+        messagebox.showinfo("Atualizado", "Lista de WebSocket atualizada!")
+
+    def clear_websocket_history(self):
+        """Limpa o histórico de WebSocket"""
+        confirm = messagebox.askyesno("Confirmar", "Deseja limpar todo o histórico de WebSocket?")
+        if confirm:
+            self.websocket_history.clear_history()
+            self.ws_connections_map = {}
+            self.selected_ws_connection = None
+            
+            # Limpa árvores
+            for item in self.ws_connections_tree.get_children():
+                self.ws_connections_tree.delete(item)
+            for item in self.ws_messages_tree.get_children():
+                self.ws_messages_tree.delete(item)
+            
+            # Limpa conteúdo
+            self.ws_message_text.delete('1.0', tk.END)
+            
+            messagebox.showinfo("Limpo", "Histórico de WebSocket limpo!")
+
+    def resend_websocket_message(self):
+        """Reenvia uma mensagem WebSocket (funcionalidade futura)"""
+        messagebox.showinfo("Em Desenvolvimento", 
+                          "A funcionalidade de reenvio de mensagens WebSocket\n"
+                          "será implementada em uma versão futura.")
 
     def run(self):
         """Inicia a aplicação"""
