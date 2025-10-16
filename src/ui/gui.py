@@ -1190,10 +1190,12 @@ class ProxyGUI:
         if not input_text:
             return
 
-        result = action_function(input_text)
-
-        self.decoder_output_text.delete("1.0", tk.END)
-        self.decoder_output_text.insert("1.0", result)
+        try:
+            result = action_function(input_text)
+            self.decoder_output_text.delete("1.0", tk.END)
+            self.decoder_output_text.insert("1.0", result)
+        except Exception as e:
+            messagebox.showerror("Erro na Ação", f"Ocorreu um erro: {e}")
 
     def setup_intruder_tab(self):
         """Configura a aba de Intruder (Sender Avançado)."""
@@ -1540,15 +1542,38 @@ class ProxyGUI:
 
         # Botões de Base64
         ttk.Button(buttons_frame, text="Encode Base64",
-                   command=lambda: self._handle_decode_action(decoder.b64_encode)).grid(row=0, column=0, padx=5, pady=5)
+                   command=lambda: self._handle_decode_action(decoder.Decoder.b64_encode)).grid(row=0, column=0, padx=5, pady=5)
         ttk.Button(buttons_frame, text="Decode Base64",
-                   command=lambda: self._handle_decode_action(decoder.b64_decode)).grid(row=0, column=1, padx=5, pady=5)
+                   command=lambda: self._handle_decode_action(decoder.Decoder.b64_decode)).grid(row=0, column=1, padx=5, pady=5)
 
         # Botões de URL
         ttk.Button(buttons_frame, text="URL Encode",
-                   command=lambda: self._handle_decode_action(decoder.url_encode)).grid(row=1, column=0, padx=5, pady=5)
+                   command=lambda: self._handle_decode_action(decoder.Decoder.url_encode)).grid(row=1, column=0, padx=5, pady=5)
         ttk.Button(buttons_frame, text="URL Decode",
-                   command=lambda: self._handle_decode_action(decoder.url_decode)).grid(row=1, column=1, padx=5, pady=5)
+                   command=lambda: self._handle_decode_action(decoder.Decoder.url_decode)).grid(row=1, column=1, padx=5, pady=5)
+
+        # Botões de HTML
+        ttk.Button(buttons_frame, text="HTML Encode",
+                   command=lambda: self._handle_decode_action(decoder.Decoder.html_encode)).grid(row=0, column=2, padx=5, pady=5)
+        ttk.Button(buttons_frame, text="HTML Decode",
+                   command=lambda: self._handle_decode_action(decoder.Decoder.html_decode)).grid(row=0, column=3, padx=5, pady=5)
+
+        # Botões de Hex
+        ttk.Button(buttons_frame, text="Hex Encode",
+                   command=lambda: self._handle_decode_action(decoder.Decoder.hex_encode)).grid(row=1, column=2, padx=5, pady=5)
+        ttk.Button(buttons_frame, text="Hex Decode",
+                   command=lambda: self._handle_decode_action(decoder.Decoder.hex_decode)).grid(row=1, column=3, padx=5, pady=5)
+
+        # Separador e Botões de Hash
+        ttk.Separator(buttons_frame, orient='horizontal').grid(row=2, columnspan=4, sticky='ew', pady=10)
+
+        ttk.Label(buttons_frame, text="Hashing:").grid(row=3, column=0, sticky='w', padx=5)
+        ttk.Button(buttons_frame, text="MD5",
+                   command=lambda: self._handle_decode_action(decoder.Decoder.hash_md5)).grid(row=3, column=1, padx=5, pady=5)
+        ttk.Button(buttons_frame, text="SHA-1",
+                   command=lambda: self._handle_decode_action(decoder.Decoder.hash_sha1)).grid(row=3, column=2, padx=5, pady=5)
+        ttk.Button(buttons_frame, text="SHA-256",
+                   command=lambda: self._handle_decode_action(decoder.Decoder.hash_sha256)).grid(row=3, column=3, padx=5, pady=5)
 
     def setup_comparator_tab(self):
         """Configura a aba de Comparador de Requisições."""
