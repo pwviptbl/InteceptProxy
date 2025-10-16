@@ -1870,10 +1870,11 @@ class ProxyGUI:
         info_frame.pack(fill="x", padx=10, pady=5)
 
         info_text = "O scanner detecta automaticamente vulnerabilidades em requisições/respostas:\n"
-        info_text += "• SQL Injection\n"
+        info_text += "• SQL Injection (Error-Based, Boolean-Based, Time-Based)\n"
         info_text += "• XSS (Cross-Site Scripting)\n"
         info_text += "• CSRF (Cross-Site Request Forgery)\n"
         info_text += "• Path Traversal\n"
+        info_text += "• Command Injection\n"
         info_text += "• CVEs conhecidas\n"
         info_text += "• Informações sensíveis expostas"
         
@@ -1908,10 +1909,19 @@ class ProxyGUI:
         ttk.Label(filter_frame, text="Tipo:").pack(side="left", padx=5)
         self.scanner_type_var = tk.StringVar(value="Todos")
         type_combo = ttk.Combobox(filter_frame, textvariable=self.scanner_type_var,
-                                  values=["Todos", "SQL Injection", "XSS (Cross-Site Scripting)", 
-                                         "CSRF (Cross-Site Request Forgery)", "Path Traversal",
-                                         "CVE / Vulnerabilidade Conhecida", "Informação Sensível Exposta"],
-                                  state="readonly", width=30)
+                                  values=["Todos", 
+                                         "SQL Injection", 
+                                         "SQL Injection (Error-Based)",
+                                         "SQL Injection (Boolean-Based)",
+                                         "SQL Injection (Time-Based)",
+                                         "XSS (Cross-Site Scripting)", 
+                                         "CSRF (Cross-Site Request Forgery)", 
+                                         "Path Traversal",
+                                         "Command Injection",
+                                         "Command Injection (Time-Based)",
+                                         "CVE / Vulnerabilidade Conhecida", 
+                                         "Informação Sensível Exposta"],
+                                  state="readonly", width=35)
         type_combo.pack(side="left", padx=5)
 
         ttk.Button(filter_frame, text="Filtrar", command=self.filter_vulnerabilities).pack(side="left", padx=5)

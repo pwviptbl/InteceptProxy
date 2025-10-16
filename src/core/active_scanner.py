@@ -109,6 +109,170 @@ class ActiveScanner:
                 log.error(f"Erro no teste de SQLi para {base_request['url']}: {e}")
         return vulnerabilities
 
+    def _check_boolean_sqli(self, base_request: Dict, point: Dict) -> List[Dict]:
+        """Testa SQL Injection Boolean-Based (TRUE vs FALSE)."""
+        vulnerabilities = []
+        
+        try:
+            # Obtém resposta original
+            original_response = self._send_modified_request(base_request, point, point['value'])
+            original_len = len(original_response.text)
+            original_status = original_response.status_code
+            
+            # Testa payload TRUE (condição verdadeira)
+            true_payload = f"{point['value']}' AND '1'='1"
+            true_response = self._send_modified_request(base_request, point, true_payload)
+            true_len = len(true_response.text)
+            
+            # Testa payload FALSE (condição falsa)
+            false_payload = f"{point['value']}' AND '1'='2"
+            false_response = self._send_modified_request(base_request, point, false_payload)
+            false_len = len(false_response.text)
+            
+            # Se TRUE é similar ao original mas FALSE é diferente, há SQL Injection
+            true_diff = abs(original_len - true_len)
+            false_diff = abs(original_len - false_len)
+            
+            # Considera que há diferença se variar mais que 10% ou 100 bytes
+            threshold = max(100, original_len * 0.1)
+            
+            if true_diff < threshold and false_diff > threshold:
+                vuln = {
+                    'type': 'SQL Injection (Boolean-Based)',
+                    'severity': 'High',
+                    'url': base_request['url'],
+                    'method': base_request['method'],
+                    'description': f"SQL Injection Boolean-Based detectado no parâmetro '{point['name']}'. "
+                                   f"Respostas TRUE e FALSE diferem significativamente.",
+                    'evidence': f"Original: {original_len} bytes, TRUE: {true_len} bytes, FALSE: {false_len} bytes",
+                }
+                vulnerabilities.append(vuln)
+                log.warning(f"Boolean-Based SQL Injection detectado em {base_request['url']} no parâmetro {point['name']}")
+                
+        except requests.exceptions.RequestException as e:
+            log.error(f"Erro no teste de Boolean SQLi para {base_request['url']}: {e}")
+        
+        return vulnerabilities
+
+    def _check_time_based_sqli(self, base_request: Dict, point: Dict) -> List[Dict]:
+        """Testa SQL Injection Time-Based (SLEEP/WAITFOR)."""
+        vulnerabilities = []
+        
+        # Payloads para diferentes bancos de dados
+        time_payloads = [
+            ("' OR SLEEP(5)--", "MySQL"),
+            ("'; WAITFOR DELAY '0:0:5'--", "MSSQL"),
+            ("'||pg_sleep(5)--", "PostgreSQL"),
+        ]
+        
+        try:
+            # Mede tempo de resposta normal
+            import time
+            start = time.time()
+            self._send_modified_request(base_request, point, point['value'])
+            normal_time = time.time() - start
+            
+            for payload, db_type in time_payloads:
+                try:
+                    full_payload = f"{point['value']}{payload}"
+                    start = time.time()
+                    self._send_modified_request(base_request, point, full_payload)
+                    delay_time = time.time() - start
+                    
+                    # Se demorou pelo menos 4 segundos a mais, detectou
+                    if delay_time - normal_time >= 4:
+                        vuln = {
+                            'type': 'SQL Injection (Time-Based)',
+                            'severity': 'High',
+                            'url': base_request['url'],
+                            'method': base_request['method'],
+                            'description': f"SQL Injection Time-Based detectado no parâmetro '{point['name']}'. "
+                                           f"Possível banco de dados: {db_type}",
+                            'evidence': f"Delay detectado: {delay_time - normal_time:.2f} segundos",
+                        }
+                        vulnerabilities.append(vuln)
+                        log.warning(f"Time-Based SQL Injection ({db_type}) detectado em {base_request['url']} no parâmetro {point['name']}")
+                        return vulnerabilities  # Retorna na primeira detecção
+                        
+                except requests.exceptions.RequestException as e:
+                    log.debug(f"Erro no teste time-based para {db_type}: {e}")
+                    
+        except requests.exceptions.RequestException as e:
+            log.error(f"Erro no teste de Time-Based SQLi para {base_request['url']}: {e}")
+        
+        return vulnerabilities
+
+    def _check_command_injection(self, base_request: Dict, point: Dict) -> List[Dict]:
+        """Testa Command Injection."""
+        vulnerabilities = []
+        
+        # Comandos que podem indicar execução
+        cmd_payloads = [
+            ("; sleep 5", "Unix/Linux"),
+            ("| sleep 5", "Unix/Linux"),
+            ("& timeout /t 5", "Windows"),
+            ("; whoami", "Unix/Linux"),
+            ("| whoami", "Unix/Linux"),
+        ]
+        
+        # Padrões que indicam sucesso de execução
+        success_patterns = [
+            r"uid=\d+",  # Output do whoami no Unix
+            r"root|daemon|www-data",  # Usuários comuns
+        ]
+        
+        try:
+            # Testa cada payload
+            for payload, os_type in cmd_payloads:
+                try:
+                    full_payload = f"{point['value']}{payload}"
+                    
+                    if "sleep" in payload or "timeout" in payload:
+                        # Testa time-based
+                        import time
+                        start = time.time()
+                        response = self._send_modified_request(base_request, point, full_payload)
+                        delay = time.time() - start
+                        
+                        if delay >= 4:
+                            vuln = {
+                                'type': 'Command Injection (Time-Based)',
+                                'severity': 'Critical',
+                                'url': base_request['url'],
+                                'method': base_request['method'],
+                                'description': f"Command Injection detectado no parâmetro '{point['name']}'. "
+                                               f"Sistema operacional: {os_type}",
+                                'evidence': f"Delay detectado: {delay:.2f} segundos com payload '{payload}'",
+                            }
+                            vulnerabilities.append(vuln)
+                            log.critical(f"Command Injection detectado em {base_request['url']} no parâmetro {point['name']}")
+                            return vulnerabilities
+                    else:
+                        # Testa output-based
+                        response = self._send_modified_request(base_request, point, full_payload)
+                        for pattern in success_patterns:
+                            if re.search(pattern, response.text, re.IGNORECASE):
+                                vuln = {
+                                    'type': 'Command Injection',
+                                    'severity': 'Critical',
+                                    'url': base_request['url'],
+                                    'method': base_request['method'],
+                                    'description': f"Command Injection detectado no parâmetro '{point['name']}'. "
+                                                   f"Sistema operacional: {os_type}",
+                                    'evidence': re.search(pattern, response.text, re.IGNORECASE).group(0),
+                                }
+                                vulnerabilities.append(vuln)
+                                log.critical(f"Command Injection detectado em {base_request['url']} no parâmetro {point['name']}")
+                                return vulnerabilities
+                                
+                except requests.exceptions.RequestException as e:
+                    log.debug(f"Erro no teste de command injection: {e}")
+                    
+        except Exception as e:
+            log.error(f"Erro no teste de Command Injection para {base_request['url']}: {e}")
+        
+        return vulnerabilities
+
     def _check_xss(self, base_request: Dict, point: Dict) -> List[Dict]:
         """Testa a vulnerabilidade de XSS Refletido."""
         vulnerabilities = []
@@ -146,7 +310,19 @@ class ActiveScanner:
             log.debug(f"Testando ponto de inserção: {point['type']} - {point['name']}")
 
             # Executa os checks de vulnerabilidade
+            # Error-Based SQL Injection
             vulnerabilities.extend(self._check_sql_injection(base_request, point))
+            
+            # Boolean-Based SQL Injection (novo)
+            vulnerabilities.extend(self._check_boolean_sqli(base_request, point))
+            
+            # Time-Based SQL Injection (novo)
+            vulnerabilities.extend(self._check_time_based_sqli(base_request, point))
+            
+            # Command Injection (novo)
+            vulnerabilities.extend(self._check_command_injection(base_request, point))
+            
+            # XSS
             vulnerabilities.extend(self._check_xss(base_request, point))
 
         # Remove duplicatas

@@ -27,12 +27,18 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
   - Grep extraction (extração de dados via regex)
   - Resource pool management (controle de threads)
 - ✅ **Scanner de Vulnerabilidades** 🔐 - Detecção automática de:
-  - SQL Injection
-  - XSS (Cross-Site Scripting)
-  - CSRF (Cross-Site Request Forgery)
-  - Path Traversal
-  - CVEs conhecidas
-  - Informações sensíveis expostas
+  - **Scanner Passivo**: Detecta vulnerabilidades em respostas HTTP
+    - SQL Injection (Error-Based)
+    - XSS (Cross-Site Scripting)
+    - CSRF (Cross-Site Request Forgery)
+    - Path Traversal
+    - CVEs conhecidas
+    - Informações sensíveis expostas
+  - **Scanner Ativo**: Testa ativamente endpoints com payloads
+    - SQL Injection (Error-Based, Boolean-Based, Time-Based)
+    - XSS Refletido
+    - Command Injection
+    - Scan sob demanda em requisições selecionadas
 - ✅ **Spider/Crawler** 🕷️ - Descoberta automática de:
   - URLs e endpoints
   - Formulários e seus campos
@@ -268,6 +274,45 @@ Na aba **"🕷️ Spider/Crawler"**, você pode descobrir automaticamente págin
    - Use "🗑 Limpar Dados" para resetar os resultados
 
 > 💡 **Dica**: O Spider funciona passivamente analisando as respostas do proxy. Quanto mais você navegar pelo site, mais completo será o mapeamento!
+
+### 3.3. Scanner Ativo (Detecção Avançada de Vulnerabilidades)
+
+Na aba **"Scanner 🔐"**, você pode executar scans ativos em requisições específicas:
+
+1. **Scanner Passivo (Automático)**:
+   - Funciona automaticamente em todas as requisições
+   - Analisa respostas HTTP em busca de padrões conhecidos
+   - Detecta: SQL Injection (erros), XSS, CSRF, Path Traversal, CVEs, informações sensíveis
+   
+2. **Scanner Ativo (Manual)**:
+   - Testa ativamente enviando payloads específicos
+   - **Como usar**:
+     1. Vá para a aba "Histórico de Requisições"
+     2. Selecione uma requisição para testar
+     3. Volte para a aba "Scanner 🔐"
+     4. Clique em "🔍 Scan Ativo"
+     5. Aguarde a conclusão do scan
+     6. Visualize as vulnerabilidades encontradas na lista
+
+3. **Tipos de Vulnerabilidades Detectadas pelo Scanner Ativo**:
+   - **SQL Injection**:
+     - Error-Based: Detecta erros SQL na resposta
+     - Boolean-Based: Compara respostas TRUE vs FALSE
+     - Time-Based: Detecta delays (SLEEP, WAITFOR)
+   - **XSS Refletido**: Verifica se payloads são refletidos na resposta
+   - **Command Injection**: Testa execução de comandos do sistema
+   
+4. **Visualizar Resultados**:
+   - Vulnerabilidades aparecem na lista com severidade (Critical/High/Medium/Low)
+   - Clique em uma vulnerabilidade para ver detalhes completos
+   - Use filtros para organizar por severidade ou tipo
+
+> ⚠️ **Aviso Importante**: O Scanner Ativo envia múltiplas requisições com payloads de teste. Use APENAS em:
+> - ✅ Seus próprios sistemas ou aplicações
+> - ✅ Ambientes de teste autorizados
+> - ✅ Com permissão explícita
+> 
+> NÃO use em sistemas de terceiros sem autorização!
 
 ### 4. Iniciar o Proxy
 
