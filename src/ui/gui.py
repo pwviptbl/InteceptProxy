@@ -2076,16 +2076,15 @@ class ProxyGUI:
         if not selection:
             messagebox.showwarning("Aviso", "Selecione uma requisição no Histórico para escanear.")
             return
-        
-        # Obtém o ID da requisição selecionada
-        item = self.history_tree.item(selection[0])
-        request_id = item['values'][0]
-        
-        # Busca a requisição no histórico
-        entry = self.history.get_entry_by_id(request_id)
+        # Obtém a entrada selecionada do mapa (o TreeView não guarda o ID como coluna)
+        item_id = selection[0]
+        entry = self.history_map.get(item_id)
+        request_id = None
         if not entry:
             messagebox.showerror("Erro", "Requisição não encontrada no histórico.")
             return
+        else:
+            request_id = entry.get('id')
         
         # Atualiza status
         self.active_scan_status.config(text="Escaneando...", foreground="orange")
