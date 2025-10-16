@@ -11,6 +11,7 @@ from mitmproxy.tools.dump import DumpMaster
 from ttkthemes import ThemedTk
 
 from src.core import decoder
+from src.core.active_scanner import ActiveScanner
 from src.core.addon import InterceptAddon
 from src.core.config import InterceptConfig
 from src.core.cookie_manager import CookieManager
@@ -31,6 +32,7 @@ class ProxyGUI:
         self.cookie_manager.set_ui_callback(self._refresh_cookie_trees)
         self.spider = Spider()  # Inicializa o Spider
         self.websocket_history = WebSocketHistory()  # Inicializa histórico WebSocket
+        self.active_scanner = ActiveScanner()  # Inicializa o Scanner Ativo
         self.proxy_thread = None
         self.proxy_running = False
         self.proxy_master = None
@@ -1868,14 +1870,30 @@ class ProxyGUI:
         info_frame.pack(fill="x", padx=10, pady=5)
 
         info_text = "O scanner detecta automaticamente vulnerabilidades em requisições/respostas:\n"
-        info_text += "• SQL Injection\n"
+        info_text += "• SQL Injection (Error-Based, Boolean-Based, Time-Based)\n"
         info_text += "• XSS (Cross-Site Scripting)\n"
         info_text += "• CSRF (Cross-Site Request Forgery)\n"
         info_text += "• Path Traversal\n"
+        info_text += "• Command Injection\n"
         info_text += "• CVEs conhecidas\n"
         info_text += "• Informações sensíveis expostas"
         
         ttk.Label(info_frame, text=info_text, justify="left").pack(anchor="w")
+
+        # Frame de Scanner Ativo
+        active_frame = ttk.LabelFrame(scanner_frame, text="Scanner Ativo", padding=10)
+        active_frame.pack(fill="x", padx=10, pady=5)
+        
+        active_info = ttk.Label(active_frame, 
+                               text="Selecione uma requisição no Histórico e clique em 'Scan Ativo' para testar ativamente.",
+                               foreground="blue")
+        active_info.pack(side="left", padx=5)
+        
+        self.active_scan_button = ttk.Button(active_frame, text="🔍 Scan Ativo", command=self.run_active_scan)
+        self.active_scan_button.pack(side="left", padx=5)
+        
+        self.active_scan_status = ttk.Label(active_frame, text="", foreground="green")
+        self.active_scan_status.pack(side="left", padx=5)
 
         # Filtros
         filter_frame = ttk.LabelFrame(scanner_frame, text="Filtros", padding=10)
@@ -1891,10 +1909,19 @@ class ProxyGUI:
         ttk.Label(filter_frame, text="Tipo:").pack(side="left", padx=5)
         self.scanner_type_var = tk.StringVar(value="Todos")
         type_combo = ttk.Combobox(filter_frame, textvariable=self.scanner_type_var,
-                                  values=["Todos", "SQL Injection", "XSS (Cross-Site Scripting)", 
-                                         "CSRF (Cross-Site Request Forgery)", "Path Traversal",
-                                         "CVE / Vulnerabilidade Conhecida", "Informação Sensível Exposta"],
-                                  state="readonly", width=30)
+                                  values=["Todos", 
+                                         "SQL Injection", 
+                                         "SQL Injection (Error-Based)",
+                                         "SQL Injection (Boolean-Based)",
+                                         "SQL Injection (Time-Based)",
+                                         "XSS (Cross-Site Scripting)", 
+                                         "CSRF (Cross-Site Request Forgery)", 
+                                         "Path Traversal",
+                                         "Command Injection",
+                                         "Command Injection (Time-Based)",
+                                         "CVE / Vulnerabilidade Conhecida", 
+                                         "Informação Sensível Exposta"],
+                                  state="readonly", width=35)
         type_combo.pack(side="left", padx=5)
 
         ttk.Button(filter_frame, text="Filtrar", command=self.filter_vulnerabilities).pack(side="left", padx=5)
@@ -2041,6 +2068,69 @@ class ProxyGUI:
         
         # Atualiza contador
         self.scanner_count_label.config(text=f"Total: {vuln_count} vulnerabilidade(s)")
+
+    def run_active_scan(self):
+        """Executa scan ativo na requisição selecionada do histórico"""
+        # Verifica se há uma requisição selecionada no histórico
+        selection = self.history_tree.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione uma requisição no Histórico para escanear.")
+            return
+        
+        # Obtém o ID da requisição selecionada
+        item = self.history_tree.item(selection[0])
+        request_id = item['values'][0]
+        
+        # Busca a requisição no histórico
+        entry = self.history.get_entry_by_id(request_id)
+        if not entry:
+            messagebox.showerror("Erro", "Requisição não encontrada no histórico.")
+            return
+        
+        # Atualiza status
+        self.active_scan_status.config(text="Escaneando...", foreground="orange")
+        self.root.update()
+        
+        try:
+            # Prepara os dados da requisição para o scanner ativo
+            request_data = {
+                'method': entry['method'],
+                'url': entry['url'],
+                'headers': entry['request_headers'],
+                'body': entry['request_body'],
+            }
+            
+            # Executa o scan ativo
+            log.info(f"Iniciando scan ativo em {entry['method']} {entry['url']}")
+            vulnerabilities = self.active_scanner.scan_request(request_data)
+            
+            if vulnerabilities:
+                # Adiciona as vulnerabilidades à entrada do histórico
+                self.history.add_vulnerabilities_to_entry(request_id, vulnerabilities)
+                
+                # Atualiza a lista de vulnerabilidades
+                self._update_scanner_list()
+                
+                # Atualiza status
+                self.active_scan_status.config(
+                    text=f"✓ {len(vulnerabilities)} vulnerabilidade(s) encontrada(s)", 
+                    foreground="green"
+                )
+                
+                messagebox.showinfo(
+                    "Scan Ativo Concluído", 
+                    f"Scan ativo concluído!\n\n{len(vulnerabilities)} vulnerabilidade(s) encontrada(s)."
+                )
+            else:
+                self.active_scan_status.config(text="✓ Nenhuma vulnerabilidade encontrada", foreground="gray")
+                messagebox.showinfo("Scan Ativo Concluído", "Scan ativo concluído!\n\nNenhuma vulnerabilidade encontrada.")
+            
+            log.info(f"Scan ativo concluído: {len(vulnerabilities)} vulnerabilidades encontradas")
+            
+        except Exception as e:
+            self.active_scan_status.config(text="✗ Erro no scan", foreground="red")
+            messagebox.showerror("Erro no Scan Ativo", f"Erro ao executar scan ativo:\n{str(e)}")
+            log.error(f"Erro no scan ativo: {e}")
 
     def setup_spider_tab(self):
         """Configura a aba do Spider/Crawler"""
