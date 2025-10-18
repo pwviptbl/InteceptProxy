@@ -23,6 +23,7 @@ from src.core.logger_config import log
 from src.ui.widgets.proxy_control_widget import ProxyControlWidget
 from src.ui.tabs.rules_tab import RulesTab
 from src.ui.tabs.intercept_tab import InterceptTab
+from src.ui.tabs.history_tab import HistoryTab
 
 class ProxyGUI(QMainWindow):
     """Interface gráfica em PySide6 para o proxy interceptador."""
@@ -107,6 +108,12 @@ class ProxyGUI(QMainWindow):
         self.intercept_tab.forward_requested.connect(self.forward_request)
         self.intercept_tab.drop_requested.connect(self.drop_request)
         self.tab_widget.addTab(self.intercept_tab, "Intercept Manual")
+
+        # Cria e adiciona a aba de histórico
+        self.history_tab = HistoryTab(self.history)
+        self.history_tab.send_to_repeater_requested.connect(self.send_to_repeater)
+        self.history_tab.send_to_sender_requested.connect(self.send_to_sender)
+        self.tab_widget.addTab(self.history_tab, "Histórico de Requisições")
 
     def start_proxy(self):
         """Inicia o servidor proxy em uma thread separada."""
@@ -233,7 +240,7 @@ class ProxyGUI(QMainWindow):
         data = message.get("data")
 
         if msg_type == "new_history_entry":
-            log.debug(f"Novo item de histórico recebido: {data['id']}")
+            self.history_tab.add_history_entry(data)
         elif msg_type == "intercepted_request":
             self.intercept_tab.display_request(data)
             self.tab_widget.setCurrentWidget(self.intercept_tab)
@@ -270,3 +277,16 @@ class ProxyGUI(QMainWindow):
         self.config.add_intercept_response(response_data)
         self.intercept_tab.reset_ui()
         log.info("Requisição interceptada cancelada (drop).")
+
+    # --- Lógica da Aba de Histórico ---
+    def send_to_repeater(self, entry: dict):
+        """Envia uma requisição do histórico para a aba de repetição."""
+        log.info(f"Enviando requisição {entry['id']} para o Repeater.")
+        # Lógica para popular a aba Repeater será implementada futuramente
+        QMessageBox.information(self, "Ação", f"Enviar requisição {entry['id']} para o Repeater (a implementar).")
+
+    def send_to_sender(self, entry: dict):
+        """Envia uma requisição do histórico para a aba de sender."""
+        log.info(f"Enviando requisição {entry['id']} para o Sender.")
+        # Lógica para popular a aba Sender será implementada futuramente
+        QMessageBox.information(self, "Ação", f"Enviar requisição {entry['id']} para o Sender (a implementar).")
