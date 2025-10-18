@@ -3,3 +3,4 @@ requests
 ttkthemes
 click
 playwright
+PySide6
