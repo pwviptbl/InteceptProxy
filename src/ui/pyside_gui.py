@@ -21,7 +21,8 @@ from src.core.active_scanner import ActiveScanner
 from src.core.browser_manager import BrowserManager
 from src.core.logger_config import log
 from src.ui.widgets.proxy_control_widget import ProxyControlWidget
-from src.ui.tabs.rules_tab import RulesTab, RulesTableModel
+from src.ui.tabs.rules_tab import RulesTab
+from src.ui.tabs.intercept_tab import InterceptTab
 
 class ProxyGUI(QMainWindow):
     """Interface gráfica em PySide6 para o proxy interceptador."""
@@ -99,6 +100,13 @@ class ProxyGUI(QMainWindow):
         # Cria e adiciona a aba de regras
         rules_tab = RulesTab(self.config)
         self.tab_widget.addTab(rules_tab, "Regras de Interceptação")
+
+        # Cria e adiciona a aba de interceptação
+        self.intercept_tab = InterceptTab()
+        self.intercept_tab.toggle_intercept_requested.connect(self.toggle_intercept)
+        self.intercept_tab.forward_requested.connect(self.forward_request)
+        self.intercept_tab.drop_requested.connect(self.drop_request)
+        self.tab_widget.addTab(self.intercept_tab, "Intercept Manual")
 
     def start_proxy(self):
         """Inicia o servidor proxy em uma thread separada."""
@@ -225,17 +233,40 @@ class ProxyGUI(QMainWindow):
         data = message.get("data")
 
         if msg_type == "new_history_entry":
-            # Futuramente, isso atualizará a aba de histórico.
-            # Por enquanto, podemos usar para log ou debug.
             log.debug(f"Novo item de histórico recebido: {data['id']}")
         elif msg_type == "intercepted_request":
-            # Lógica para exibir requisição interceptada
-            pass
+            self.intercept_tab.display_request(data)
+            self.tab_widget.setCurrentWidget(self.intercept_tab)
         elif msg_type == "update_spider_stats":
-            # Lógica para atualizar estatísticas do spider
             pass
         elif msg_type == "update_websocket_list":
-            # Lógica para atualizar lista de websockets
             pass
 
-    pass
+    # --- Lógica da Aba de Interceptação ---
+    def toggle_intercept(self):
+        """Alterna o estado de interceptação manual."""
+        if not self.proxy_running:
+            QMessageBox.warning(self, "Aviso", "Inicie o proxy primeiro.")
+            self.intercept_tab.set_intercept_state(False)
+            return
+
+        is_enabled = self.config.toggle_intercept()
+        self.intercept_tab.set_intercept_state(is_enabled)
+        log.info(f"Interceptação manual alterada para: {is_enabled}")
+
+    def forward_request(self, modified_data: dict):
+        """Envia a requisição interceptada (com possíveis modificações)."""
+        response_data = {
+            'action': 'forward',
+            **modified_data
+        }
+        self.config.add_intercept_response(response_data)
+        self.intercept_tab.reset_ui()
+        log.info("Requisição interceptada enviada (forward).")
+
+    def drop_request(self):
+        """Cancela a requisição interceptada."""
+        response_data = {'action': 'drop'}
+        self.config.add_intercept_response(response_data)
+        self.intercept_tab.reset_ui()
+        log.info("Requisição interceptada cancelada (drop).")
