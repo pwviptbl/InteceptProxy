@@ -56,6 +56,10 @@ class ProxyGUI:
         # WebSocket state
         self.ws_connections_map = {}
         self.selected_ws_connection = None
+        
+        # Lazy loading state - track which tabs have been initialized
+        self.initialized_tabs = set()
+        self.tab_setup_methods = {}
 
         # Janela principal com tema
         self.root = ThemedTk(theme="arc")
@@ -114,38 +118,52 @@ class ProxyGUI:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Tab 1: Configuração de Regras
+        # Initialize only the first tab (Rules) immediately
+        # Tab 1: Configuração de Regras (always loaded first)
         self.setup_rules_tab()
 
-        # Tab 2: Intercept Manual
-        self.setup_intercept_tab()
+        # Create placeholder frames for other tabs and register their setup methods
+        self._register_lazy_tab("Intercept Manual", self.setup_intercept_tab, 1)
+        self._register_lazy_tab("Histórico de Requisições", self.setup_history_tab, 2)
+        self._register_lazy_tab("Repetição", self.setup_repeater_tab, 3)
+        self._register_lazy_tab("Sender", self.setup_sender_tab, 4)
+        self._register_lazy_tab("Decoder", self.setup_decoder_tab, 5)
+        self._register_lazy_tab("Comparator", self.setup_comparator_tab, 6)
+        self._register_lazy_tab("Cookie Jar", self.setup_cookie_jar_tab, 7)
+        self._register_lazy_tab("Scanner", self.setup_scanner_tab, 8)
+        self._register_lazy_tab("🕷️ Spider/Crawler", self.setup_spider_tab, 9)
+        self._register_lazy_tab("WebSocket", self.setup_websocket_tab, 10)
 
-        # Tab 3: Histórico de Requisições
-        self.setup_history_tab()
-
-        # Tab 4: Repetição
-        self.setup_repeater_tab()
-
-        # Tab 5: Sender
-        self.setup_sender_tab()
-
-        # Tab 7: Decoder
-        self.setup_decoder_tab()
-
-        # Tab 8: Comparator
-        self.setup_comparator_tab()
-
-        # Tab 9: Cookie Jar
-        self.setup_cookie_jar_tab()
-
-        # Tab 10: Scanner de Vulnerabilidades
-        self.setup_scanner_tab()
+        # Bind tab change event to load tabs on demand
+        self.notebook.bind('<<NotebookTabChanged>>', self._on_tab_changed)
+    
+    def _register_lazy_tab(self, tab_name, setup_method, tab_index):
+        """Register a tab for lazy loading"""
+        # Create a placeholder frame
+        placeholder_frame = ttk.Frame(self.notebook)
+        self.notebook.add(placeholder_frame, text=tab_name)
         
-        # Tab 11: Spider/Crawler
-        self.setup_spider_tab()
+        # Store the setup method for this tab
+        self.tab_setup_methods[tab_index] = (setup_method, placeholder_frame)
+    
+    def _on_tab_changed(self, event):
+        """Called when user switches tabs - loads tab content on demand"""
+        current_tab = self.notebook.index(self.notebook.select())
         
-        # Tab 12: WebSocket
-        self.setup_websocket_tab()
+        # Check if this tab needs to be initialized
+        if current_tab not in self.initialized_tabs and current_tab in self.tab_setup_methods:
+            setup_method, placeholder_frame = self.tab_setup_methods[current_tab]
+            
+            # Remove the placeholder
+            self.notebook.forget(current_tab)
+            
+            # Initialize the real tab content
+            setup_method()
+            
+            # Mark as initialized
+            self.initialized_tabs.add(current_tab)
+            
+            log.info(f"Lazy loaded tab at index {current_tab}")
 
     def setup_rules_tab(self):
         """Configura a aba de regras"""
@@ -646,15 +664,32 @@ class ProxyGUI:
 
     def update_history_list(self):
         """Atualiza a lista de histórico adicionando apenas novas entradas."""
-        new_entries = self.history.get_new_entries(self.last_history_id)
-        if new_entries:
-            self._add_new_history_entries(new_entries)
-            # Atualiza também a lista de vulnerabilidades
-            self._update_scanner_list()
+        # Only update if the history tab is initialized
+        if 2 not in self.initialized_tabs:
+            self.root.after(1000, self.update_history_list)
+            return
+        
+        # Run the update in a background thread to avoid blocking the UI
+        def update_in_background():
+            try:
+                new_entries = self.history.get_new_entries(self.last_history_id)
+                if new_entries:
+                    # Schedule UI update on main thread
+                    self.root.after(0, lambda: self._add_new_history_entries(new_entries))
+            except Exception as e:
+                log.error(f"Error updating history list: {e}")
+        
+        thread = threading.Thread(target=update_in_background, daemon=True)
+        thread.start()
+        
         self.root.after(1000, self.update_history_list)
 
     def _add_new_history_entries(self, entries):
         """Adiciona novas entradas de histórico à tabela e atualiza o ID mais recente."""
+        # Only add entries if history tab is initialized
+        if not hasattr(self, 'history_tree'):
+            return
+        
         for entry in entries:
             # Aplica os filtros atuais antes de adicionar
             method_filter = self.method_filter.get()
@@ -678,6 +713,10 @@ class ProxyGUI:
             ))
             self.history_map[item_id] = entry
             self.last_history_id = entry['id']
+        
+        # Atualiza também a lista de vulnerabilidades em background
+        if entries:
+            threading.Thread(target=self._update_scanner_list, daemon=True).start()
 
     def apply_history_filter(self):
         """Limpa a tabela e reaplica os filtros, carregando todo o histórico relevante."""
@@ -2065,6 +2104,10 @@ class ProxyGUI:
 
     def _update_scanner_list(self):
         """Atualiza a lista de vulnerabilidades na UI"""
+        # Only update if scanner tab is initialized
+        if not hasattr(self, 'scanner_tree'):
+            return
+        
         # Limpa a árvore
         for item in self.scanner_tree.get_children():
             self.scanner_tree.delete(item)
@@ -2407,14 +2450,28 @@ class ProxyGUI:
     
     def update_spider_stats(self):
         """Atualiza as estatísticas do Spider periodicamente"""
+        # Only update if spider tab is initialized
+        if 9 not in self.initialized_tabs:
+            self.root.after(2000, self.update_spider_stats)
+            return
+        
         if hasattr(self, 'spider_stats_label'):
-            stats = self.spider.get_stats()
-            self.spider_stats_label.config(
-                text=f"URLs Descobertas: {stats['discovered_urls']} | "
-                     f"Na Fila: {stats['queue_size']} | "
-                     f"Visitadas: {stats['visited']} | "
-                     f"Formulários: {stats['forms_found']}"
-            )
+            # Run in background thread to avoid blocking UI
+            def update_in_background():
+                try:
+                    stats = self.spider.get_stats()
+                    # Schedule UI update on main thread
+                    self.root.after(0, lambda: self.spider_stats_label.config(
+                        text=f"URLs Descobertas: {stats['discovered_urls']} | "
+                             f"Na Fila: {stats['queue_size']} | "
+                             f"Visitadas: {stats['visited']} | "
+                             f"Formulários: {stats['forms_found']}"
+                    ))
+                except Exception as e:
+                    log.error(f"Error updating spider stats: {e}")
+            
+            thread = threading.Thread(target=update_in_background, daemon=True)
+            thread.start()
         
         # Reagenda para 2 segundos depois
         self.root.after(2000, self.update_spider_stats)
@@ -2568,35 +2625,58 @@ class ProxyGUI:
 
     def update_websocket_list(self):
         """Atualiza periodicamente a lista de conexões WebSocket"""
-        try:
-            # Limpa árvore de conexões
-            for item in self.ws_connections_tree.get_children():
-                self.ws_connections_tree.delete(item)
-            
-            # Adiciona novas conexões
-            connections = self.websocket_history.get_connections()
-            for conn in connections:
-                flow_id = conn['flow_id']
-                
-                # Formata timestamp
-                start_time = conn['start_time'].strftime('%Y-%m-%d %H:%M:%S')
-                
-                # Adiciona à árvore
-                item_id = self.ws_connections_tree.insert("", "end", 
-                    values=(
-                        conn['id'],
-                        conn['host'],
-                        conn['url'],
-                        conn['status'],
-                        conn['message_count'],
-                        start_time
-                    ))
-                
-                # Mapeia item_id para flow_id
-                self.ws_connections_map[item_id] = flow_id
+        # Only update if websocket tab is initialized
+        if 10 not in self.initialized_tabs:
+            self.root.after(2000, self.update_websocket_list)
+            return
         
-        except Exception as e:
-            log.error(f"Erro ao atualizar lista de WebSocket: {e}")
+        # Run in background thread to avoid blocking UI
+        def update_in_background():
+            try:
+                # Get connections from history
+                connections = self.websocket_history.get_connections()
+                
+                # Schedule UI update on main thread
+                def update_ui():
+                    try:
+                        # Double check tree exists (in case tab was closed)
+                        if not hasattr(self, 'ws_connections_tree'):
+                            return
+                        
+                        # Limpa árvore de conexões
+                        for item in self.ws_connections_tree.get_children():
+                            self.ws_connections_tree.delete(item)
+                        
+                        # Adiciona novas conexões
+                        for conn in connections:
+                            flow_id = conn['flow_id']
+                            
+                            # Formata timestamp
+                            start_time = conn['start_time'].strftime('%Y-%m-%d %H:%M:%S')
+                            
+                            # Adiciona à árvore
+                            item_id = self.ws_connections_tree.insert("", "end", 
+                                values=(
+                                    conn['id'],
+                                    conn['host'],
+                                    conn['url'],
+                                    conn['status'],
+                                    conn['message_count'],
+                                    start_time
+                                ))
+                            
+                            # Mapeia item_id para flow_id
+                            self.ws_connections_map[item_id] = flow_id
+                    except Exception as e:
+                        log.error(f"Erro ao atualizar UI WebSocket: {e}")
+                
+                self.root.after(0, update_ui)
+            
+            except Exception as e:
+                log.error(f"Erro ao atualizar lista de WebSocket: {e}")
+        
+        thread = threading.Thread(target=update_in_background, daemon=True)
+        thread.start()
         
         # Reagenda para 2 segundos depois
         self.root.after(2000, self.update_websocket_list)
