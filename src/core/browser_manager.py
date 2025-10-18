@@ -1,6 +1,7 @@
 import asyncio
 import subprocess
 import sys
+import traceback
 from playwright.async_api import async_playwright, Playwright, Browser, Page
 from threading import Thread
 
@@ -47,20 +48,35 @@ class BrowserManager:
     async def _launch_browser_async(self):
         """Lança o navegador de forma assíncrona."""
         if not self._is_chromium_installed():
-            # Executa a instalação em uma thread para não bloquear a UI
-            install_thread = Thread(target=self._install_chromium, daemon=True)
-            install_thread.start()
-            return
+            # Executa a instalação de forma assíncrona em thread para não bloquear a UI
+            print("[DEBUG] Chromium não está instalado. Iniciando instalação...")
+            await asyncio.to_thread(self._install_chromium)
+            print("[DEBUG] Instalação do Chromium finalizada. Continuando tentativa de lançamento...")
 
-        self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(
-            headless=False,
-            proxy={"server": f"http://127.0.0.1:{self.proxy_port}"},
-            args=["--ignore-certificate-errors"]
-        )
-        self.page = await self.browser.new_page()
-        # Garante que o navegador seja fechado quando a página for fechada pelo usuário
-        self.page.on("close", self.close_browser_sync)
+        # Inicia o playwright e lança o browser dentro do bloco try abaixo.
+        try:
+            print("[DEBUG] Playwright: iniciando playwright...")
+            self.playwright = self.playwright or await async_playwright().start()
+            print("[DEBUG] Playwright: playwright iniciado.")
+            print("[DEBUG] Playwright: lançando chromium...")
+            self.browser = await self.playwright.chromium.launch(
+                headless=False,
+                proxy={"server": f"http://127.0.0.1:{self.proxy_port}"},
+                args=["--ignore-certificate-errors"]
+            )
+            print("[DEBUG] Playwright: chromium lançado.")
+            print("[DEBUG] Playwright: criando nova página...")
+            self.page = await self.browser.new_page()
+            print("[DEBUG] Playwright: nova página criada.")
+            print("[DEBUG] Playwright: navegando para google.com...")
+            await self.page.goto("https://www.google.com")
+            print("[DEBUG] Playwright: navegação concluída.")
+            # Garante que o navegador seja fechado quando a página for fechada pelo usuário
+            self.page.on("close", self.close_browser_sync)
+            print("[DEBUG] Playwright: handler de fechamento registrado.")
+        except Exception as e:
+            print(f"[ERRO] Falha ao abrir o navegador: {e}")
+            traceback.print_exc()
 
 
     def launch_browser(self):
@@ -69,9 +85,17 @@ class BrowserManager:
         # para executá-lo a partir de um contexto síncrono (como o Tkinter).
         def run_async():
             loop = asyncio.new_event_loop()
+            # Armazena o loop para permitir fechamentos thread-safe
+            self.playwright_loop = loop
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(self._launch_browser_async())
-            loop.run_forever()
+            try:
+                print("[DEBUG] Playwright thread: iniciando loop de eventos")
+                loop.run_until_complete(self._launch_browser_async())
+                print("[DEBUG] Playwright thread: _launch_browser_async finalizado, executando loop forever")
+                loop.run_forever()
+            except Exception as e:
+                print(f"[DEBUG] Playwright thread: exceção não tratada: {e}")
+                traceback.print_exc()
 
         thread = Thread(target=run_async, daemon=True)
         thread.start()
@@ -79,8 +103,9 @@ class BrowserManager:
     def close_browser_sync(self, *args):
         """Fecha o navegador a partir de um contexto síncrono."""
         if self.playwright:
-            # Obtenha o loop de eventos da thread onde o playwright está rodando
-            loop = asyncio.get_event_loop()
+            # Usa o loop da thread do Playwright, se disponível
+            loop = getattr(self, 'playwright_loop', None) or asyncio.get_event_loop()
+            print(f"[DEBUG] close_browser_sync: agendando _close_browser_async no loop {loop}")
             # Agende o fechamento de forma thread-safe
             loop.call_soon_threadsafe(lambda: asyncio.create_task(self._close_browser_async()))
 
