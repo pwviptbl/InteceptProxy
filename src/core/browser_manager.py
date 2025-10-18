@@ -4,6 +4,7 @@ import sys
 import traceback
 from playwright.async_api import async_playwright, Playwright, Browser, Page
 from threading import Thread
+import tkinter as tk
 
 class BrowserManager:
     """
@@ -16,6 +17,15 @@ class BrowserManager:
         self.playwright: Playwright | None = None
         self.on_install_start = on_install_start
         self.on_install_finish = on_install_finish
+
+    def _get_screen_dimensions(self):
+        """Obtém a largura e altura da tela principal."""
+        root = tk.Tk()
+        root.withdraw()  # Não exibe a janela principal do Tkinter
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        root.destroy()
+        return screen_width, screen_height
 
     def _is_chromium_installed(self):
         """Verifica se o Chromium está instalado."""
@@ -59,14 +69,24 @@ class BrowserManager:
             self.playwright = self.playwright or await async_playwright().start()
             print("[DEBUG] Playwright: playwright iniciado.")
             print("[DEBUG] Playwright: lançando chromium...")
+            screen_width, screen_height = self._get_screen_dimensions()
+            print(f"[DEBUG] Screen dimensions detected: {screen_width}x{screen_height}")
+
             self.browser = await self.playwright.chromium.launch(
                 headless=False,
                 proxy={"server": f"http://127.0.0.1:{self.proxy_port}"},
-                args=["--ignore-certificate-errors", "--start-maximized"]
+                args=["--ignore-certificate-errors"]
             )
             print("[DEBUG] Playwright: chromium lançado.")
+
+            print("[DEBUG] Playwright: criando novo contexto...")
+            context = await self.browser.new_context(
+                viewport={'width': screen_width, 'height': screen_height}
+            )
+            print("[DEBUG] Playwright: novo contexto criado.")
+
             print("[DEBUG] Playwright: criando nova página...")
-            self.page = await self.browser.new_page()
+            self.page = await context.new_page()
             print("[DEBUG] Playwright: nova página criada.")
             print("[DEBUG] Playwright: navegando para google.com...")
             await self.page.goto("https://www.google.com")
