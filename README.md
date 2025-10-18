@@ -13,7 +13,7 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
 - ✅ Suporte para GET (query string) e POST (form data)
 - ✅ Ativar/desativar regras individualmente
 - ✅ Persistência de configurações em JSON
-- ✅ **Porta Configurável** - Escolha a porta do proxy (padrão: 8080)
+- ✅ **Porta Configurável** - Escolha a porta do proxy (padrão: 9507)
 - ✅ **Intercept Manual (Forward/Drop)** - Funcionalidade inspirada no Burp Suite
 - ✅ **WebSocket Support** 🔌 - Interceptação e monitoramento de WebSocket:
   - Listagem de conexões WebSocket ativas e fechadas
@@ -135,7 +135,7 @@ Para mais informações sobre o histórico, veja [docs/HISTORY_GUIDE.md](docs/HI
 
 ### 3.0. Configurar a Porta do Proxy
 
-Por padrão, o proxy escuta na porta 8080, mas você pode configurar qualquer porta entre 1 e 65535.
+Por padrão, o proxy escuta na porta 9507, mas você pode configurar qualquer porta entre 1 e 65535.
 
 #### Via Interface Gráfica:
 
@@ -316,21 +316,21 @@ Na aba **"Scanner 🔐"**, você pode executar scans ativos em requisições esp
 
 ### 4. Iniciar o Proxy
 
-Clique no botão **"Iniciar Proxy"**. O servidor será iniciado na porta configurada (padrão: 8080).
+Clique no botão **"Iniciar Proxy"**. O servidor será iniciado na porta configurada (padrão: 9507).
 
 ### 5. Configurar o Navegador
 
 Configure seu navegador para usar o proxy:
 
 - **Host/IP**: `localhost` ou `127.0.0.1`
-- **Porta**: A porta configurada (padrão: `8080`)
+- **Porta**: A porta configurada (padrão: `9507`)
 
 > 💡 Para interceptar tráfego HTTPS é obrigatório instalar o certificado raiz do mitmproxy. Com o proxy em execução, acesse `http://mitm.it`, baixe o certificado para o seu sistema/navegador e instale-o na lista de autoridades confiáveis. Reinicie o navegador depois dessa etapa.
 
 #### Exemplo no Firefox:
 1. Configurações → Geral → Configurações de Rede
 2. Configurar Proxy Manualmente
-3. HTTP Proxy: `localhost`, Porta: a porta configurada (ex: `8080`)
+3. HTTP Proxy: `localhost`, Porta: a porta configurada (ex: `9507`)
 4. Marcar "Usar este proxy para todos os protocolos"
 
 #### Exemplo no Chrome:
@@ -453,7 +453,7 @@ InteceptProxy/
 - O proxy intercepta apenas requisições HTTP. Para HTTPS, você precisará instalar o certificado CA do mitmproxy no navegador
 - As configurações (regras e porta) são salvas automaticamente no arquivo `intercept_config.json`
 - O proxy mantém todos os parâmetros não configurados com seus valores originais
-- A porta padrão é 8080, mas pode ser alterada a qualquer momento via interface ou CLI
+- A porta padrão é 9507, mas pode ser alterada a qualquer momento via interface ou CLI
 - **NOVO:** A atividade do proxy (regras aplicadas, erros) é registrada no arquivo `proxy.log` para facilitar a depuração.
 
 ## Solução de Problemas
@@ -465,7 +465,7 @@ Se precisar interceptar HTTPS, instale o certificado do mitmproxy:
 3. Reinicie o navegador para que ele reconheça a nova autoridade
 
 ### Porta já em uso
-Se a porta padrão (8080) ou a porta configurada já estiver em uso, você tem algumas opções:
+Se a porta padrão (9507) ou a porta configurada já estiver em uso, você tem algumas opções:
 
 **Opção 1 - Alterar a Porta via Interface Gráfica:**
 1. Certifique-se de que o proxy está parado

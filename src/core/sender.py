@@ -20,7 +20,7 @@ def _substitute_value(source: str, param_name: str, new_value: str) -> str:
         else:
             return f"{source}&{param_name}={new_value}"
 
-def send_from_raw(raw_request: str, param_name: str = None, new_value: str = None, proxy_port: int = 8080):
+def send_from_raw(raw_request: str, param_name: str = None, new_value: str = None, proxy_port: int = 9507):
     """
     Parses a raw HTTP request, optionally substitutes a parameter,
     and resends it, returning the response object.
@@ -90,7 +90,7 @@ def send_from_raw(raw_request: str, param_name: str = None, new_value: str = Non
         log.error(f"Error resending request: {e}", exc_info=True)
         return None
 
-def run_sender_from_file(raw_request: str, file_path: str, param_name: str, num_threads: int, queue=None, proxy_port: int = 8080):
+def run_sender_from_file(raw_request: str, file_path: str, param_name: str, num_threads: int, queue=None, proxy_port: int = 9507):
     """
     Reads a file and resends the base request for each value in the file, in parallel.
     """

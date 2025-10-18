@@ -22,9 +22,9 @@ class TestPortConfig(unittest.TestCase):
             os.remove(self.config_file)
 
     def test_default_port(self):
-        """Testa se a porta padrão é 8080."""
+        """Testa se a porta padrão é 9507."""
         config = InterceptConfig(config_file=self.config_file)
-        self.assertEqual(config.get_port(), 8080, "Porta padrão deve ser 8080")
+        self.assertEqual(config.get_port(), 9507, "Porta padrão deve ser 9507")
 
     def test_set_valid_port(self):
         """Testa definir uma porta válida."""
@@ -45,28 +45,28 @@ class TestPortConfig(unittest.TestCase):
         config = InterceptConfig(config_file=self.config_file)
         success, message = config.set_port(-1)
         self.assertFalse(success, "Deve rejeitar porta negativa")
-        self.assertEqual(config.get_port(), 8080, "Porta deve permanecer 8080")
+        self.assertEqual(config.get_port(), 9507, "Porta deve permanecer 9507")
 
     def test_set_invalid_port_zero(self):
         """Testa rejeitar porta zero."""
         config = InterceptConfig(config_file=self.config_file)
         success, message = config.set_port(0)
         self.assertFalse(success, "Deve rejeitar porta zero")
-        self.assertEqual(config.get_port(), 8080, "Porta deve permanecer 8080")
+        self.assertEqual(config.get_port(), 9507, "Porta deve permanecer 9507")
 
     def test_set_invalid_port_too_high(self):
         """Testa rejeitar porta maior que 65535."""
         config = InterceptConfig(config_file=self.config_file)
         success, message = config.set_port(65536)
         self.assertFalse(success, "Deve rejeitar porta > 65535")
-        self.assertEqual(config.get_port(), 8080, "Porta deve permanecer 8080")
+        self.assertEqual(config.get_port(), 9507, "Porta deve permanecer 9507")
 
     def test_set_invalid_port_string(self):
         """Testa rejeitar string não numérica."""
         config = InterceptConfig(config_file=self.config_file)
         success, message = config.set_port("abc")
         self.assertFalse(success, "Deve rejeitar string não numérica")
-        self.assertEqual(config.get_port(), 8080, "Porta deve permanecer 8080")
+        self.assertEqual(config.get_port(), 9507, "Porta deve permanecer 9507")
 
     def test_port_persistence(self):
         """Testa se a porta é persistida no arquivo."""

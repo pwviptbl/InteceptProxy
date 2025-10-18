@@ -1,0 +1,5 @@
+mitmproxy
+requests
+ttkthemes
+click
+playwright

@@ -161,7 +161,7 @@ def get_port():
 
 
 @cli.command('run')
-@click.option('--port', type=int, default=None, help="Porta para o proxy escutar (padrão: configuração salva ou 8080)")
+@click.option('--port', type=int, default=None, help="Porta para o proxy escutar (padrão: configuração salva ou 9507)")
 def run_proxy(port):
     """Inicia o proxy em modo headless."""
     config = InterceptConfig()
