@@ -134,6 +134,9 @@ class ProxyGUI:
         
         # Tab 12: WebSocket
         self.setup_websocket_tab()
+        
+        # Tab 13: Embedded Browser
+        self.setup_browser_tab()
 
     def setup_rules_tab(self):
         """Configura a aba de regras"""
@@ -2703,6 +2706,152 @@ class ProxyGUI:
         messagebox.showinfo("Em Desenvolvimento", 
                           "A funcionalidade de reenvio de mensagens WebSocket\n"
                           "será implementada em uma versão futura.")
+
+    def setup_browser_tab(self):
+        """Configura a aba do Browser Integrado"""
+        browser_tab = ttk.Frame(self.notebook)
+        self.notebook.add(browser_tab, text="🌐 Browser")
+
+        # Frame de informações
+        info_frame = ttk.LabelFrame(browser_tab, text="Browser Integrado", padding=10)
+        info_frame.pack(fill="x", padx=10, pady=5)
+
+        info_text = ("Este browser está automaticamente configurado para usar o proxy InteceptProxy.\n"
+                    "✓ Proxy configurado: localhost:{port}\n"
+                    "✓ Certificado mitmproxy automaticamente confiável\n"
+                    "✓ Todas as requisições passam pelo proxy\n\n"
+                    "Clique em 'Abrir Browser' para iniciar o navegador integrado.")
+        
+        # Format with current port
+        info_text = info_text.format(port=self.config.get_port())
+        
+        info_label = ttk.Label(info_frame, text=info_text, justify="left")
+        info_label.pack(pady=5)
+
+        # Frame de controle
+        control_frame = ttk.LabelFrame(browser_tab, text="Controle do Browser", padding=10)
+        control_frame.pack(fill="x", padx=10, pady=5)
+
+        # Status do Browser
+        self.browser_status_label = ttk.Label(control_frame, text="Status: Não iniciado", foreground="gray")
+        self.browser_status_label.pack(pady=5)
+
+        # Botão para abrir o browser
+        self.open_browser_button = ttk.Button(
+            control_frame, 
+            text="🌐 Abrir Browser", 
+            command=self.launch_embedded_browser,
+            style="Accent.TButton"
+        )
+        self.open_browser_button.pack(pady=10)
+
+        Tooltip(self.open_browser_button, 
+               "Abre o browser integrado com proxy e certificado pré-configurados")
+
+        # Frame de instruções
+        instructions_frame = ttk.LabelFrame(browser_tab, text="Instruções de Uso", padding=10)
+        instructions_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        instructions_text = scrolledtext.ScrolledText(instructions_frame, wrap=tk.WORD, height=15)
+        instructions_text.pack(fill="both", expand=True, padx=5, pady=5)
+
+        instructions_content = """COMO USAR O BROWSER INTEGRADO:
+
+1. INICIAR O PROXY
+   - Certifique-se de que o proxy está em execução
+   - Clique em "Iniciar Proxy" na parte superior se ainda não estiver rodando
+
+2. ABRIR O BROWSER
+   - Clique no botão "Abrir Browser" acima
+   - Uma nova janela do browser será aberta
+   - O browser já está configurado para usar o proxy
+
+3. NAVEGAR NA WEB
+   - Use a barra de endereços para digitar URLs
+   - Todos os sites que você visitar passarão pelo proxy
+   - Você pode ver todas as requisições na aba "Histórico de Requisições"
+
+4. CERTIFICADO HTTPS
+   - O browser já confia no certificado do mitmproxy automaticamente
+   - Você pode navegar em sites HTTPS sem avisos de certificado
+   - Por padrão, o browser abre em http://mitm.it onde você pode baixar o certificado se necessário
+
+5. RECURSOS DO BROWSER
+   - Botões de navegação: Voltar (←), Avançar (→), Recarregar (⟳)
+   - Barra de endereços com botão "Go"
+   - Status do proxy sempre visível na parte inferior
+
+6. INTERCEPTAÇÃO E ANÁLISE
+   - Com o "Intercept Manual" ativado, você pode interceptar requisições do browser
+   - Use o "Scanner" para analisar vulnerabilidades
+   - O "Spider/Crawler" pode descobrir páginas automaticamente enquanto você navega
+
+DICAS:
+- O browser funciona melhor quando o proxy está em execução
+- Você pode abrir múltiplas janelas do browser se necessário
+- Todas as funcionalidades do InteceptProxy funcionam com o browser integrado
+- Feche o browser quando terminar de usá-lo
+"""
+
+        instructions_text.insert('1.0', instructions_content)
+        instructions_text.configure(state='disabled')
+
+    def launch_embedded_browser(self):
+        """Lança o browser integrado em um processo separado"""
+        if not self.proxy_running:
+            messagebox.showwarning("Aviso", 
+                                 "O proxy não está em execução!\n\n"
+                                 "Inicie o proxy primeiro para usar o browser integrado.")
+            return
+
+        try:
+            import threading
+            from src.ui.embedded_browser import launch_browser
+            
+            # Obtém a porta do proxy
+            proxy_port = self.config.get_port()
+            
+            # Atualiza o status
+            self.browser_status_label.config(text="Status: Iniciando...", foreground="orange")
+            self.root.update()
+            
+            def run_browser():
+                try:
+                    launch_browser(proxy_host='127.0.0.1', proxy_port=proxy_port)
+                    # Atualiza status quando o browser fechar
+                    self.root.after(0, lambda: self.browser_status_label.config(
+                        text="Status: Fechado", foreground="gray"))
+                except Exception as e:
+                    log.error(f"Erro ao iniciar browser: {e}")
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "Erro", f"Erro ao iniciar o browser:\n{str(e)}"))
+                    self.root.after(0, lambda: self.browser_status_label.config(
+                        text="Status: Erro", foreground="red"))
+            
+            # Inicia o browser em uma thread separada
+            browser_thread = threading.Thread(target=run_browser, daemon=True)
+            browser_thread.start()
+            
+            # Atualiza status
+            self.browser_status_label.config(text="Status: Em execução", foreground="green")
+            
+            log.info(f"Browser integrado iniciado na porta {proxy_port}")
+            
+            messagebox.showinfo("Browser Iniciado", 
+                              f"Browser integrado iniciado com sucesso!\n\n"
+                              f"Proxy: localhost:{proxy_port}\n"
+                              f"Certificado: Automaticamente confiável\n\n"
+                              f"Uma nova janela foi aberta.")
+        
+        except ImportError as e:
+            log.error(f"Erro ao importar módulo do browser: {e}")
+            messagebox.showerror("Erro", 
+                               "Erro ao carregar o módulo do browser.\n\n"
+                               "Certifique-se de que PyQt5 e PyQtWebEngine estão instalados:\n"
+                               "pip install PyQt5 PyQtWebEngine")
+        except Exception as e:
+            log.error(f"Erro ao lançar browser: {e}")
+            messagebox.showerror("Erro", f"Erro ao lançar o browser:\n{str(e)}")
 
     def run(self):
         """Inicia a aplicação"""

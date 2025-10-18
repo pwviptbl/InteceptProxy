@@ -49,6 +49,13 @@ Aplicação Python com interface gráfica que permite configurar regras de inter
   - Highlighting automático de diferenças
   - Útil para encontrar tokens CSRF e mudanças sutis
   - Algoritmo inteligente usando difflib
+- ✅ **Browser Integrado** 🌐 - Browser embutido com configuração automática:
+  - Proxy configurado automaticamente (localhost:porta)
+  - Certificado mitmproxy automaticamente confiável
+  - Interface completa com navegação e barra de endereços
+  - Todas as requisições passam pelo proxy
+  - Funciona perfeitamente com todas as ferramentas (Intercept, Scanner, Spider)
+  - Baseado em PyQt5 WebEngine para máxima compatibilidade
 - ✅ Histórico de requisições com filtros avançados
 - ✅ Visualização detalhada de Request/Response
 - ✅ Filtros por método HTTP e regex de domínio
@@ -318,9 +325,39 @@ Na aba **"Scanner 🔐"**, você pode executar scans ativos em requisições esp
 
 Clique no botão **"Iniciar Proxy"**. O servidor será iniciado na porta configurada (padrão: 8080).
 
-### 5. Configurar o Navegador
+### 5. Usar o Browser Integrado (Recomendado) 🌐
 
-Configure seu navegador para usar o proxy:
+O InteceptProxy agora inclui um browser integrado que elimina a necessidade de configuração manual do proxy!
+
+Na aba **"🌐 Browser"**:
+
+1. **Iniciar o Proxy**: Certifique-se de que o proxy está em execução (botão "Iniciar Proxy" no topo)
+
+2. **Abrir o Browser**: Clique no botão "🌐 Abrir Browser"
+   - Uma nova janela do browser será aberta automaticamente
+   - O proxy já está configurado (localhost:porta)
+   - O certificado mitmproxy já está confiável - sem avisos HTTPS!
+
+3. **Navegar**: Use o browser normalmente:
+   - Barra de endereços para digitar URLs
+   - Botões de navegação (←, →, ⟳)
+   - Status do proxy sempre visível
+
+4. **Todas as Ferramentas Funcionam**: 
+   - O histórico de requisições mostra tudo que você visitar
+   - Use "Intercept Manual" para interceptar requisições do browser
+   - Execute o "Scanner" em páginas que você visitar
+   - O "Spider/Crawler" pode descobrir páginas automaticamente
+
+> 💡 **Vantagens do Browser Integrado**:
+> - ✅ Sem necessidade de configuração manual do proxy
+> - ✅ Certificado HTTPS automaticamente confiável
+> - ✅ Integração perfeita com todas as ferramentas do InteceptProxy
+> - ✅ Interface amigável e fácil de usar
+
+### 6. OU Configure seu Próprio Navegador (Alternativa)
+
+Se preferir usar seu navegador regular, configure-o manualmente para usar o proxy:
 
 - **Host/IP**: `localhost` ou `127.0.0.1`
 - **Porta**: A porta configurada (padrão: `8080`)
@@ -336,7 +373,9 @@ Configure seu navegador para usar o proxy:
 #### Exemplo no Chrome:
 Use as configurações de sistema ou extensões como "Proxy SwitchyOmega"
 
-### 6. Navegação
+> 💡 Para interceptar tráfego HTTPS com seu próprio navegador, você precisará instalar o certificado raiz do mitmproxy. Com o proxy em execução, acesse `http://mitm.it`, baixe o certificado para o seu sistema/navegador e instale-o na lista de autoridades confiáveis. Reinicie o navegador depois dessa etapa.
+
+### 7. Navegação
 
 Navegue normalmente. Quando acessar uma URL que corresponda às regras configuradas, os parâmetros serão automaticamente substituídos.
 
