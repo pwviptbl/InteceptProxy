@@ -16,7 +16,12 @@ class InterceptConfig:
         self.intercept_queue = queue.Queue()
         self.intercept_response_queue = queue.Queue()
         self.intercept_lock = threading.Lock()
+        self.ui_queue = None  # Fila para notificar a UI
         self.load_config()
+
+    def set_ui_queue(self, ui_queue: queue.Queue):
+        """Define a fila para notificações da UI."""
+        self.ui_queue = ui_queue
 
     def load_config(self):
         """Carrega configuração do arquivo"""
@@ -103,12 +108,17 @@ class InterceptConfig:
         return self.intercept_enabled
 
     def add_to_intercept_queue(self, flow_data):
-        """Adiciona uma requisição à fila de interceptação."""
+        """Adiciona uma requisição à fila de interceptação e notifica a UI."""
         self.intercept_queue.put(flow_data)
+        if self.ui_queue:
+            # Envia uma cópia dos dados necessários para a UI, sem o objeto 'flow'
+            ui_data = {k: v for k, v in flow_data.items() if k != 'flow'}
+            self.ui_queue.put({"type": "intercepted_request", "data": ui_data})
 
     def get_from_intercept_queue(self, timeout=0.1):
         """Obtém uma requisição da fila de interceptação."""
         try:
+            # Este método não precisa mais ser usado pela GUI
             return self.intercept_queue.get(timeout=timeout)
         except queue.Empty:
             return None

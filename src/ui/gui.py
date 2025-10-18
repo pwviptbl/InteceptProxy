@@ -1,9 +1,9 @@
 import asyncio
-import queue
 import re
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
+import queue
 import requests
 
 from mitmproxy import options
@@ -49,6 +49,9 @@ class ProxyGUI:
         self.current_intercept_request = None
         self.intercept_response_text = None
         
+        # Fila para atualizações da UI
+        self.ui_queue = queue.Queue()
+
         # Comparator state
         self.comparator_request_1 = None
         self.comparator_request_2 = None
@@ -65,18 +68,9 @@ class ProxyGUI:
 
         self.setup_ui()
         self.refresh_rules_list()
-
-        # Atualiza o histórico periodicamente
-        self.update_history_list()
         
-        # Atualiza a fila de interceptação periodicamente
-        self.check_intercept_queue()
-        
-        # Atualiza estatísticas do Spider periodicamente
-        self.update_spider_stats()
-        
-        # Atualiza lista de WebSocket periodicamente
-        self.update_websocket_list()
+        # Inicia o processador da fila de eventos da UI
+        self.process_ui_queue()
 
     def setup_ui(self):
         """Configura a interface gráfica"""
@@ -114,43 +108,40 @@ class ProxyGUI:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Tab 1: Configuração de Regras
-        self.setup_rules_tab()
+        # Rastreia as abas que já foram carregadas
+        self.loaded_tabs = {}
 
-        # Tab 2: Intercept Manual
-        self.setup_intercept_tab()
+        # Mapeia o nome da aba para a sua função de setup
+        self.tab_setups = {
+            "Regras de Interceptação": self.setup_rules_tab,
+            "Intercept Manual": self.setup_intercept_tab,
+            "Histórico de Requisições": self.setup_history_tab,
+            "Repetição": self.setup_repeater_tab,
+            "Sender": self.setup_sender_tab,
+            "Decoder": self.setup_decoder_tab,
+            "Comparador": self.setup_comparator_tab,
+            "Cookie Jar": self.setup_cookie_jar_tab,
+            "Scanner 🔐": self.setup_scanner_tab,
+            "🕷️ Spider/Crawler": self.setup_spider_tab,
+            "WebSocket 🔌": self.setup_websocket_tab,
+        }
 
-        # Tab 3: Histórico de Requisições
-        self.setup_history_tab()
+        # Cria as abas vazias
+        for tab_name in self.tab_setups.keys():
+            frame = ttk.Frame(self.notebook)
+            self.notebook.add(frame, text=tab_name)
+            self.loaded_tabs[tab_name] = False # Marca como não carregada
 
-        # Tab 4: Repetição
-        self.setup_repeater_tab()
+        # Binda o evento de troca de aba
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
-        # Tab 5: Sender
-        self.setup_sender_tab()
-
-        # Tab 7: Decoder
-        self.setup_decoder_tab()
-
-        # Tab 8: Comparator
-        self.setup_comparator_tab()
-
-        # Tab 9: Cookie Jar
-        self.setup_cookie_jar_tab()
-
-        # Tab 10: Scanner de Vulnerabilidades
-        self.setup_scanner_tab()
-        
-        # Tab 11: Spider/Crawler
-        self.setup_spider_tab()
-        
-        # Tab 12: WebSocket
-        self.setup_websocket_tab()
+        # Carrega a primeira aba manualmente
+        self.load_tab_content("Regras de Interceptação")
 
     def setup_rules_tab(self):
         """Configura a aba de regras"""
-        rules_tab = ttk.Frame(self.notebook)
-        self.notebook.add(rules_tab, text="Regras de Interceptação")
+        # Obtém o frame da aba correspondente, que já foi criado
+        rules_tab = self.notebook.winfo_children()[0]
 
         # Frame de configuração de regras
         config_frame = ttk.LabelFrame(rules_tab, text="Adicionar Regra de Interceptação", padding=10)
@@ -243,8 +234,7 @@ class ProxyGUI:
 
     def setup_intercept_tab(self):
         """Configura a aba de interceptação manual"""
-        intercept_tab = ttk.Frame(self.notebook)
-        self.notebook.add(intercept_tab, text="Intercept Manual")
+        intercept_tab = self.notebook.winfo_children()[1]
 
         # Frame de controle superior
         control_frame = ttk.LabelFrame(intercept_tab, text="Controle de Interceptação", padding=10)
@@ -346,8 +336,7 @@ class ProxyGUI:
 
     def setup_history_tab(self):
         """Configura a aba de histórico"""
-        history_tab = ttk.Frame(self.notebook)
-        self.notebook.add(history_tab, text="Histórico de Requisições")
+        history_tab = self.notebook.winfo_children()[2]
 
         # Frame de filtros
         filter_frame = ttk.LabelFrame(history_tab, text="Filtros", padding=10)
@@ -531,7 +520,14 @@ class ProxyGUI:
                     port = self.config.get_port()
                     proxy_options = options.Options(listen_host='127.0.0.1', listen_port=port)
                     master = DumpMaster(proxy_options, with_termlog=False, with_dumper=False)
-                    master.addons.add(InterceptAddon(self.config, self.history, self.cookie_manager, self.spider, self.websocket_history))
+
+                    # Passa a fila da UI para o Addon
+                    addon = InterceptAddon(
+                        self.config, self.history, self.cookie_manager,
+                        self.spider, self.websocket_history, self.ui_queue
+                    )
+                    master.addons.add(addon)
+
                     self.proxy_master = master
                     self.proxy_loop = loop
                     await master.run()
@@ -644,14 +640,31 @@ class ProxyGUI:
             self.port_entry.delete(0, tk.END)
             self.port_entry.insert(0, str(self.config.get_port()))
 
-    def update_history_list(self):
-        """Atualiza a lista de histórico adicionando apenas novas entradas."""
-        new_entries = self.history.get_new_entries(self.last_history_id)
-        if new_entries:
-            self._add_new_history_entries(new_entries)
-            # Atualiza também a lista de vulnerabilidades
-            self._update_scanner_list()
-        self.root.after(1000, self.update_history_list)
+    def process_ui_queue(self):
+        """Processa eventos da fila para atualizar a UI de forma assíncrona."""
+        try:
+            while not self.ui_queue.empty():
+                try:
+                    message = self.ui_queue.get_nowait()
+                    msg_type = message.get("type")
+                    data = message.get("data")
+
+                    if msg_type == "new_history_entry":
+                        self._add_new_history_entries([data])
+                        self._update_scanner_list() # Atualiza scanner se houver nova requisição
+                    elif msg_type == "intercepted_request":
+                        self._display_intercepted_request(data)
+                    elif msg_type == "update_spider_stats":
+                        self._update_spider_stats_ui(data)
+                    elif msg_type == "update_websocket_list":
+                        self._update_websocket_list_ui(data)
+
+                except queue.Empty:
+                    pass # Fila ficou vazia, pode acontecer
+                except Exception as e:
+                    log.error(f"Erro ao processar fila da UI: {e}")
+        finally:
+            self.root.after(100, self.process_ui_queue) # Reagenda a verificação
 
     def _add_new_history_entries(self, entries):
         """Adiciona novas entradas de histórico à tabela e atualiza o ID mais recente."""
@@ -737,8 +750,7 @@ class ProxyGUI:
 
     def setup_repeater_tab(self):
         """Configura a aba de Repetição manual."""
-        repeater_tab = ttk.Frame(self.notebook)
-        self.notebook.add(repeater_tab, text="Repetição")
+        repeater_tab = self.notebook.winfo_children()[3]
 
         # Frame superior para configuração
         config_frame = ttk.LabelFrame(repeater_tab, text="Configuração do Reenvio", padding=10)
@@ -779,8 +791,7 @@ class ProxyGUI:
 
     def setup_sender_tab(self):
         """Configura a aba de Sender (envios em massa)."""
-        sender_tab = ttk.Frame(self.notebook)
-        self.notebook.add(sender_tab, text="Sender")
+        sender_tab = self.notebook.winfo_children()[4]
 
         # Frame superior para configuração
         config_frame = ttk.LabelFrame(sender_tab, text="Configuração de Envio em Massa", padding=10)
@@ -1066,8 +1077,7 @@ class ProxyGUI:
 
     def setup_cookie_jar_tab(self):
         """Configura a aba do Gerenciador de Cookies (Cookie Jar)."""
-        cookie_tab = ttk.Frame(self.notebook)
-        self.notebook.add(cookie_tab, text="Cookie Jar")
+        cookie_tab = self.notebook.winfo_children()[7]
 
         # PanedWindow para dividir a tela
         paned = ttk.PanedWindow(cookie_tab, orient=tk.HORIZONTAL)
@@ -1532,8 +1542,7 @@ class ProxyGUI:
 
     def setup_decoder_tab(self):
         """Configura a aba da ferramenta Decoder."""
-        decoder_tab = ttk.Frame(self.notebook)
-        self.notebook.add(decoder_tab, text="Decoder")
+        decoder_tab = self.notebook.winfo_children()[5]
 
         # PanedWindow para dividir a área de texto dos botões
         main_paned = ttk.PanedWindow(decoder_tab, orient=tk.VERTICAL)
@@ -1600,8 +1609,7 @@ class ProxyGUI:
 
     def setup_comparator_tab(self):
         """Configura a aba de Comparador de Requisições."""
-        comparator_tab = ttk.Frame(self.notebook)
-        self.notebook.add(comparator_tab, text="Comparador")
+        comparator_tab = self.notebook.winfo_children()[6]
 
         # Frame de instruções
         info_frame = ttk.LabelFrame(comparator_tab, text="Instruções", padding=5)
@@ -1817,16 +1825,6 @@ class ProxyGUI:
             self._reset_intercept_ui()
             log.info("Interceptação manual desativada.")
 
-    def check_intercept_queue(self):
-        """Verifica a fila de interceptação periodicamente."""
-        if self.config.is_intercept_enabled():
-            request_data = self.config.get_from_intercept_queue(timeout=0.01)
-            if request_data:
-                self._display_intercepted_request(request_data)
-        
-        # Agenda próxima verificação
-        self.root.after(100, self.check_intercept_queue)
-
     def _display_intercepted_request(self, request_data):
         """Exibe a requisição interceptada na UI."""
         self.current_intercept_request = request_data
@@ -1852,7 +1850,7 @@ class ProxyGUI:
         self.drop_button.config(state="normal")
 
         # Muda para a aba de interceptação
-        self.notebook.select(1)  # Aba Intercept Manual
+        self.notebook.select(1)
 
     def forward_request(self):
         """Envia a requisição interceptada (com modificações)."""
@@ -1910,8 +1908,7 @@ class ProxyGUI:
 
     def setup_scanner_tab(self):
         """Configura a aba de Scanner de Vulnerabilidades"""
-        scanner_frame = ttk.Frame(self.notebook)
-        self.notebook.add(scanner_frame, text="Scanner 🔐")
+        scanner_frame = self.notebook.winfo_children()[8]
 
         # Frame superior com informações
         info_frame = ttk.LabelFrame(scanner_frame, text="Scanner de Vulnerabilidades", padding=10)
@@ -2181,8 +2178,7 @@ class ProxyGUI:
 
     def setup_spider_tab(self):
         """Configura a aba do Spider/Crawler"""
-        spider_tab = ttk.Frame(self.notebook)
-        self.notebook.add(spider_tab, text="🕷️ Spider/Crawler")
+        spider_tab = self.notebook.winfo_children()[9]
         
         # Frame de controle
         control_frame = ttk.LabelFrame(spider_tab, text="Controle do Spider", padding=10)
@@ -2405,19 +2401,15 @@ class ProxyGUI:
             
             log.info("Dados do Spider limpos")
     
-    def update_spider_stats(self):
-        """Atualiza as estatísticas do Spider periodicamente"""
+    def _update_spider_stats_ui(self, stats):
+        """Atualiza as estatísticas do Spider na UI."""
         if hasattr(self, 'spider_stats_label'):
-            stats = self.spider.get_stats()
             self.spider_stats_label.config(
                 text=f"URLs Descobertas: {stats['discovered_urls']} | "
                      f"Na Fila: {stats['queue_size']} | "
                      f"Visitadas: {stats['visited']} | "
                      f"Formulários: {stats['forms_found']}"
             )
-        
-        # Reagenda para 2 segundos depois
-        self.root.after(2000, self.update_spider_stats)
     
     def refresh_spider_urls(self):
         """Atualiza a lista de URLs descobertas"""
@@ -2485,8 +2477,7 @@ class ProxyGUI:
 
     def setup_websocket_tab(self):
         """Configura a aba de WebSocket"""
-        websocket_tab = ttk.Frame(self.notebook)
-        self.notebook.add(websocket_tab, text="WebSocket 🔌")
+        websocket_tab = self.notebook.winfo_children()[10]
 
         # Frame superior - Lista de Conexões
         connections_frame = ttk.LabelFrame(websocket_tab, text="Conexões WebSocket", padding=10)
@@ -2566,40 +2557,36 @@ class ProxyGUI:
         self.ws_resend_button = ttk.Button(buttons_frame, text="Reenviar Mensagem", command=self.resend_websocket_message, state="disabled")
         self.ws_resend_button.pack(side="left", padx=5)
 
-    def update_websocket_list(self):
-        """Atualiza periodicamente a lista de conexões WebSocket"""
-        try:
-            # Limpa árvore de conexões
-            for item in self.ws_connections_tree.get_children():
-                self.ws_connections_tree.delete(item)
-            
-            # Adiciona novas conexões
-            connections = self.websocket_history.get_connections()
-            for conn in connections:
-                flow_id = conn['flow_id']
-                
-                # Formata timestamp
-                start_time = conn['start_time'].strftime('%Y-%m-%d %H:%M:%S')
-                
-                # Adiciona à árvore
-                item_id = self.ws_connections_tree.insert("", "end", 
-                    values=(
-                        conn['id'],
-                        conn['host'],
-                        conn['url'],
-                        conn['status'],
-                        conn['message_count'],
-                        start_time
-                    ))
-                
-                # Mapeia item_id para flow_id
-                self.ws_connections_map[item_id] = flow_id
+    def _update_websocket_list_ui(self, connections):
+        """Atualiza a lista de conexões WebSocket na UI a partir de um evento."""
         
-        except Exception as e:
-            log.error(f"Erro ao atualizar lista de WebSocket: {e}")
+        # Mantém a seleção atual para restaurá-la depois
+        current_selection = self.ws_connections_tree.selection()
         
-        # Reagenda para 2 segundos depois
-        self.root.after(2000, self.update_websocket_list)
+        # Limpa a árvore de conexões
+        for item in self.ws_connections_tree.get_children():
+            self.ws_connections_tree.delete(item)
+        self.ws_connections_map.clear()
+
+        # Adiciona as conexões atualizadas
+        for conn in connections:
+            flow_id = conn['flow_id']
+            start_time = conn['start_time'].strftime('%Y-%m-%d %H:%M:%S')
+
+            item_id = self.ws_connections_tree.insert("", "end",
+                values=(
+                    conn['id'],
+                    conn['host'],
+                    conn['url'],
+                    conn['status'],
+                    conn['message_count'],
+                    start_time
+                ))
+            self.ws_connections_map[item_id] = flow_id
+
+        # Restaura a seleção se ainda existir
+        if current_selection and self.ws_connections_tree.exists(current_selection[0]):
+            self.ws_connections_tree.selection_set(current_selection[0])
 
     def on_ws_connection_select(self, event):
         """Chamado quando uma conexão WebSocket é selecionada"""
@@ -2748,3 +2735,19 @@ class ProxyGUI:
     def run(self):
         """Inicia a aplicação"""
         self.root.mainloop()
+
+    def on_tab_changed(self, event):
+        """Chamado quando o usuário troca de aba."""
+        selected_tab_name = event.widget.tab(event.widget.select(), "text")
+        self.load_tab_content(selected_tab_name)
+
+    def load_tab_content(self, tab_name):
+        """Carrega o conteúdo de uma aba se ainda não foi carregado."""
+        if not self.loaded_tabs.get(tab_name, False):
+            # Encontra a função de setup correspondente
+            setup_function = self.tab_setups.get(tab_name)
+            if setup_function:
+                # Chama a função para construir o conteúdo da aba
+                setup_function()
+                self.loaded_tabs[tab_name] = True
+                log.info(f"Conteúdo da aba '{tab_name}' carregado sob demanda.")

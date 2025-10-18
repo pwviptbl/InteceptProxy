@@ -11,10 +11,14 @@ from .websocket_history import WebSocketHistory
 from .active_scanner import ActiveScanner
 
 
+import queue
+
+
 class InterceptAddon:
     """Addon do mitmproxy para interceptar e modificar requisições"""
 
-    def __init__(self, config: InterceptConfig, history: RequestHistory = None, cookie_manager: CookieManager = None, spider: Spider = None, websocket_history: WebSocketHistory = None):
+    def __init__(self, config: InterceptConfig, history: RequestHistory = None, cookie_manager: CookieManager = None,
+                 spider: Spider = None, websocket_history: WebSocketHistory = None, ui_queue: queue.Queue = None):
         self.config = config
         self.history = history
         self.cookie_manager = cookie_manager
@@ -22,6 +26,17 @@ class InterceptAddon:
         self.active_scanner = ActiveScanner()  # Scanner ativo
         self.spider = spider
         self.websocket_history = websocket_history
+
+        # Define a fila da UI para os componentes que precisam dela
+        if ui_queue:
+            if self.config:
+                self.config.set_ui_queue(ui_queue)
+            if self.history:
+                self.history.set_ui_queue(ui_queue)
+            if self.spider:
+                self.spider.set_ui_queue(ui_queue)
+            if self.websocket_history:
+                self.websocket_history.set_ui_queue(ui_queue)
 
     def run_active_scan_on_request(self, request_id: int):
         """

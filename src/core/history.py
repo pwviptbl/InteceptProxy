@@ -2,6 +2,9 @@ from datetime import datetime
 from mitmproxy import http
 
 
+import queue
+
+
 class RequestHistory:
     """Gerencia o histórico de requisições"""
 
@@ -9,6 +12,11 @@ class RequestHistory:
         self.history = []
         self.max_items = 1000
         self.current_id = 0
+        self.ui_queue = None
+
+    def set_ui_queue(self, ui_queue: queue.Queue):
+        """Define a fila para notificações da UI."""
+        self.ui_queue = ui_queue
 
     def add_request(self, flow: http.HTTPFlow, vulnerabilities=None):
         """Adiciona uma requisição ao histórico"""
@@ -39,6 +47,10 @@ class RequestHistory:
         # Limita o tamanho do histórico
         if len(self.history) > self.max_items:
             self.history.pop(0)
+
+        # Notifica a UI sobre a nova entrada
+        if self.ui_queue:
+            self.ui_queue.put({"type": "new_history_entry", "data": entry})
 
     def get_history(self):
         """Retorna todo o histórico"""

@@ -2,6 +2,9 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 
+import queue
+
+
 class WebSocketHistory:
     """Gerencia o histórico de conexões e mensagens WebSocket"""
 
@@ -9,6 +12,11 @@ class WebSocketHistory:
         self.connections = {}  # {flow_id: connection_info}
         self.messages = {}  # {flow_id: [messages]}
         self.current_id = 0
+        self.ui_queue = None
+
+    def set_ui_queue(self, ui_queue: queue.Queue):
+        """Define a fila para notificações da UI."""
+        self.ui_queue = ui_queue
 
     def add_connection(self, flow_id: str, url: str, host: str):
         """Registra uma nova conexão WebSocket"""
@@ -24,6 +32,10 @@ class WebSocketHistory:
             'message_count': 0,
         }
         self.messages[flow_id] = []
+
+        # Notifica a UI
+        if self.ui_queue:
+            self.ui_queue.put({"type": "update_websocket_list", "data": self.get_connections()})
 
     def add_message(self, flow_id: str, message: bytes, from_client: bool):
         """Adiciona uma mensagem WebSocket ao histórico"""
@@ -57,11 +69,19 @@ class WebSocketHistory:
         if flow_id in self.connections:
             self.connections[flow_id]['message_count'] += 1
 
+        # Notifica a UI
+        if self.ui_queue:
+            self.ui_queue.put({"type": "update_websocket_list", "data": self.get_connections()})
+
     def close_connection(self, flow_id: str):
         """Marca uma conexão WebSocket como fechada"""
         if flow_id in self.connections:
             self.connections[flow_id]['end_time'] = datetime.now()
             self.connections[flow_id]['status'] = 'closed'
+
+            # Notifica a UI
+            if self.ui_queue:
+                self.ui_queue.put({"type": "update_websocket_list", "data": self.get_connections()})
 
     def get_connections(self) -> List[Dict]:
         """Retorna todas as conexões WebSocket"""

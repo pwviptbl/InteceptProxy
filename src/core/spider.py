@@ -62,6 +62,9 @@ class LinkParser(HTMLParser):
             self.current_form = None
 
 
+import queue
+
+
 class Spider:
     """Spider/Crawler para descoberta automática de URLs"""
     
@@ -75,6 +78,11 @@ class Spider:
         self.scope_urls: List[str] = []  # URLs no escopo
         self.max_depth = 3
         self.max_urls = 1000
+        self.ui_queue = None
+
+    def set_ui_queue(self, ui_queue: queue.Queue):
+        """Define a fila para notificações da UI."""
+        self.ui_queue = ui_queue
         
     def is_running(self) -> bool:
         """Retorna se o spider está ativo"""
@@ -168,6 +176,10 @@ class Spider:
         
         # Atualiza o sitemap
         self._update_sitemap(url)
+
+        # Notifica a UI sobre a atualização de estatísticas
+        if self.ui_queue:
+            self.ui_queue.put({"type": "update_spider_stats", "data": self.get_stats()})
         
         # Processa apenas HTML
         if 'html' not in content_type.lower():
