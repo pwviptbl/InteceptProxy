@@ -354,6 +354,8 @@ Na aba **"🌐 Browser"**:
 > - ✅ Certificado HTTPS automaticamente confiável
 > - ✅ Integração perfeita com todas as ferramentas do InteceptProxy
 > - ✅ Interface amigável e fácil de usar
+>
+> Para mais detalhes, veja [docs/EMBEDDED_BROWSER_GUIDE.md](docs/EMBEDDED_BROWSER_GUIDE.md)
 
 ### 6. OU Configure seu Próprio Navegador (Alternativa)
 
