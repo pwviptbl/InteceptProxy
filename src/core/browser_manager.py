@@ -62,7 +62,7 @@ class BrowserManager:
             self.browser = await self.playwright.chromium.launch(
                 headless=False,
                 proxy={"server": f"http://127.0.0.1:{self.proxy_port}"},
-                args=["--ignore-certificate-errors"]
+                args=["--ignore-certificate-errors", "--start-maximized"]
             )
             print("[DEBUG] Playwright: chromium lançado.")
             print("[DEBUG] Playwright: criando nova página...")
