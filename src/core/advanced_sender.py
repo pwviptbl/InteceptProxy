@@ -296,7 +296,7 @@ class AdvancedSender:
                  processors: List[List[Dict[str, Any]]] = None,
                  grep_patterns: List[str] = None,
                  num_threads: int = 10,
-                 proxy_port: int = 8080):
+                 proxy_port: int = 9507):
         """
         Args:
             raw_request: Base request with §markers§ for payload positions

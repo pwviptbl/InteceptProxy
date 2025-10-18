@@ -10,7 +10,7 @@ class InterceptConfig:
     def __init__(self, config_file="intercept_config.json"):
         self.config_file = config_file
         self.rules = []
-        self.port = 8080  # Porta padrão
+        self.port = 9507  # Porta padrão
         self.paused = False
         self.intercept_enabled = False
         self.intercept_queue = queue.Queue()
@@ -25,14 +25,14 @@ class InterceptConfig:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.rules = data.get('rules', [])
-                    self.port = data.get('port', 8080)
+                    self.port = data.get('port', 9507)
             except Exception as e:
                 print(f"Erro ao carregar config: {e}")
                 self.rules = []
-                self.port = 8080
+                self.port = 9507
         else:
             self.rules = []
-            self.port = 8080
+            self.port = 9507
 
     def save_config(self):
         """Salva configuração no arquivo"""

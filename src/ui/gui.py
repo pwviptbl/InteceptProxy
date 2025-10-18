@@ -19,6 +19,7 @@ from src.core.history import RequestHistory
 from src.core.logger_config import log
 from src.core.spider import Spider
 from src.core.websocket_history import WebSocketHistory
+from src.core.browser_manager import BrowserManager
 from .tooltip import Tooltip
 
 
@@ -33,6 +34,11 @@ class ProxyGUI:
         self.spider = Spider()  # Inicializa o Spider
         self.websocket_history = WebSocketHistory()  # Inicializa histórico WebSocket
         self.active_scanner = ActiveScanner()  # Inicializa o Scanner Ativo
+        self.browser_manager = BrowserManager(
+            proxy_port=self.config.get_port(),
+            on_install_start=self.on_browser_install_start,
+            on_install_finish=self.on_browser_install_finish
+        )
         self.proxy_thread = None
         self.proxy_running = False
         self.proxy_master = None
@@ -55,6 +61,7 @@ class ProxyGUI:
         self.root = ThemedTk(theme="arc")
         self.root.title("InteceptProxy - Configurador")
         self.root.geometry("1000x700")
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.setup_ui()
         self.refresh_rules_list()
@@ -97,6 +104,11 @@ class ProxyGUI:
         
         self.port_save_button = ttk.Button(control_frame, text="Salvar Porta", command=self.save_port)
         self.port_save_button.pack(side="left", padx=5)
+
+        # Botão para abrir o navegador
+        self.browser_button = ttk.Button(control_frame, text="Abrir Navegador", command=self.launch_browser, state="disabled")
+        self.browser_button.pack(side="left", padx=(20, 5))
+        Tooltip(self.browser_button, "Abre um navegador pré-configurado para usar o proxy.")
 
         # Notebook (Tabs)
         self.notebook = ttk.Notebook(self.root)
@@ -221,7 +233,7 @@ class ProxyGUI:
         info_frame = ttk.LabelFrame(rules_tab, text="Instruções", padding=10)
         info_frame.pack(fill="x", padx=10, pady=5)
 
-        info_text = """1. Configure a porta desejada (padrão: 8080) e clique em "Salvar Porta"
+        info_text = """1. Configure a porta desejada (padrão: 9507) e clique em "Salvar Porta"
 2. Configure o navegador para usar o proxy: localhost:<porta configurada>
 3. Adicione regras de interceptação com host, caminho, nome do parâmetro e valor
 4. Inicie o proxy
@@ -553,6 +565,7 @@ class ProxyGUI:
         self.start_button.config(state="disabled")
         self.stop_button.config(state="normal")
         self.pause_button.config(state="normal")
+        self.browser_button.config(state="normal")
 
         port = self.config.get_port()
         messagebox.showinfo("Proxy Iniciado",
@@ -586,6 +599,16 @@ class ProxyGUI:
         self.start_button.config(state="normal")
         self.stop_button.config(state="disabled")
         self.pause_button.config(state="disabled", text="Pausar")
+        self.browser_button.config(state="disabled")
+
+    def launch_browser(self):
+        """Lança o navegador usando o BrowserManager."""
+        if not self.proxy_running:
+            messagebox.showwarning("Aviso", "O proxy precisa estar em execução para abrir o navegador.")
+            return
+
+        log.info("Solicitando abertura do navegador...")
+        self.browser_manager.launch_browser()
 
     def toggle_pause_proxy(self):
         """Alterna o estado de pausa do proxy e atualiza a UI."""
@@ -2703,6 +2726,24 @@ class ProxyGUI:
         messagebox.showinfo("Em Desenvolvimento", 
                           "A funcionalidade de reenvio de mensagens WebSocket\n"
                           "será implementada em uma versão futura.")
+
+    def on_browser_install_start(self):
+        """Callback para quando a instalação do navegador começa."""
+        self.browser_button.config(state="disabled", text="Instalando Navegador...")
+        self.root.update_idletasks()
+
+    def on_browser_install_finish(self):
+        """Callback para quando a instalação do navegador termina."""
+        self.browser_button.config(state="normal", text="Abrir Navegador")
+        messagebox.showinfo("Sucesso", "Navegador instalado! Você já pode abri-lo.")
+
+    def on_closing(self):
+        """Handler para o fechamento da janela."""
+        log.info("Fechando aplicação...")
+        if self.proxy_running:
+            self.stop_proxy()
+        self.browser_manager.close()
+        self.root.destroy()
 
     def run(self):
         """Inicia a aplicação"""
