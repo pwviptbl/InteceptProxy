@@ -1,4 +1,4 @@
-from PySide6.QtCore import QAbstractTableModel, Qt, Signal
+from PySide6.QtCore import QAbstractTableModel, Qt, Signal, QSortFilterProxyModel
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit,
                                QGroupBox, QHBoxLayout, QTableView, QAbstractItemView,
                                QTextEdit, QTabWidget, QSplitter, QComboBox, QHeaderView)
@@ -11,6 +11,7 @@ class HistoryTab(QWidget):
 
     send_to_repeater_requested = Signal(dict)
     send_to_sender_requested = Signal(dict)
+    clear_history_requested = Signal()
 
     def __init__(self, history: RequestHistory):
         super().__init__()
@@ -32,8 +33,29 @@ class HistoryTab(QWidget):
     def _setup_filters(self, layout):
         filter_group = QGroupBox("Filtros")
         filter_layout = QHBoxLayout()
-        # Adicionar filtros aqui no futuro
-        filter_layout.addWidget(QLabel("Filtros (a implementar)"))
+
+        # Filtro por método
+        filter_layout.addWidget(QLabel("Método:"))
+        self.method_filter = QComboBox()
+        self.method_filter.addItems(["Todos", "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+        filter_layout.addWidget(self.method_filter)
+
+        # Filtro por domínio
+        filter_layout.addWidget(QLabel("Domínio:"))
+        self.domain_filter = QLineEdit()
+        self.domain_filter.setPlaceholderText("ex: google.com")
+        filter_layout.addWidget(self.domain_filter)
+
+        # Botões de ação
+        apply_button = QPushButton("Aplicar Filtros")
+        apply_button.clicked.connect(self._apply_filters)
+        filter_layout.addWidget(apply_button)
+
+        clear_button = QPushButton("Limpar Histórico")
+        clear_button.clicked.connect(self._confirm_clear_history)
+        filter_layout.addWidget(clear_button)
+
+        filter_layout.addStretch()
         filter_group.setLayout(filter_layout)
         layout.addWidget(filter_group)
 
@@ -47,7 +69,9 @@ class HistoryTab(QWidget):
         self.history_table.setSortingEnabled(True)
 
         self.history_model = HistoryTableModel()
-        self.history_table.setModel(self.history_model)
+        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model.setSourceModel(self.history_model)
+        self.history_table.setModel(self.proxy_model)
 
         header = self.history_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
@@ -85,7 +109,8 @@ class HistoryTab(QWidget):
             return
 
         row = selected_indexes[0].row()
-        entry_id = self.history_model.get_entry_id(row)
+        source_index = self.proxy_model.mapToSource(selected_indexes[0])
+        entry_id = self.history_model.get_entry_id(source_index.row())
         entry = self.entry_map.get(entry_id)
 
         if not entry:
@@ -108,8 +133,9 @@ class HistoryTab(QWidget):
         if not selected.indexes():
             return
 
-        row = selected.indexes()[0].row()
-        entry_id = self.history_model.get_entry_id(row)
+        proxy_index = selected.indexes()[0]
+        source_index = self.proxy_model.mapToSource(proxy_index)
+        entry_id = self.history_model.get_entry_id(source_index.row())
         entry = self.entry_map.get(entry_id)
 
         if entry:
@@ -125,6 +151,37 @@ class HistoryTab(QWidget):
         """Adiciona uma nova entrada de histórico à tabela."""
         self.entry_map[entry['id']] = entry
         self.history_model.add_entry(entry)
+
+    def _confirm_clear_history(self):
+        """Exibe um diálogo de confirmação antes de limpar o histórico."""
+        reply = QMessageBox.question(self, 'Confirmar Limpeza',
+                                     "Você tem certeza que deseja limpar todo o histórico?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            self.clear_history_requested.emit()
+
+    def _apply_filters(self):
+        """Aplica os filtros de método e domínio na tabela."""
+        # Filtro de método (Coluna 2)
+        method_filter = self.method_filter.currentText()
+        if method_filter != "Todos":
+            self.proxy_model.setFilterKeyColumn(2)
+            self.proxy_model.setFilterRegularExpression(f"^{method_filter}$")
+        else:
+            # Limpa o filtro de método se "Todos" for selecionado
+            self.proxy_model.setFilterKeyColumn(2)
+            self.proxy_model.setFilterRegularExpression(".*")
+
+        # Filtro de domínio (Coluna 1)
+        domain_filter = self.domain_filter.text().strip()
+        self.proxy_model.setFilterKeyColumn(1)
+        self.proxy_model.setFilterRegularExpression(domain_filter)
+
+    def clear_display(self):
+        """Limpa a exibição da tabela."""
+        self.history_model.clear()
+        self.entry_map.clear()
 
 class HistoryTableModel(QAbstractTableModel):
     def __init__(self, data=None):
@@ -161,3 +218,9 @@ class HistoryTableModel(QAbstractTableModel):
 
     def get_entry_id(self, row):
         return self._data[row]['id']
+
+    def clear(self):
+        """Limpa todos os dados do modelo."""
+        self.beginResetModel()
+        self._data = []
+        self.endResetModel()

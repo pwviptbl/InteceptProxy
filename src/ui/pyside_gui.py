@@ -113,6 +113,7 @@ class ProxyGUI(QMainWindow):
         self.history_tab = HistoryTab(self.history)
         self.history_tab.send_to_repeater_requested.connect(self.send_to_repeater)
         self.history_tab.send_to_sender_requested.connect(self.send_to_sender)
+        self.history_tab.clear_history_requested.connect(self._clear_history)
         self.tab_widget.addTab(self.history_tab, "Histórico de Requisições")
 
     def start_proxy(self):
@@ -290,3 +291,10 @@ class ProxyGUI(QMainWindow):
         log.info(f"Enviando requisição {entry['id']} para o Sender.")
         # Lógica para popular a aba Sender será implementada futuramente
         QMessageBox.information(self, "Ação", f"Enviar requisição {entry['id']} para o Sender (a implementar).")
+
+    def _clear_history(self):
+        """Limpa o histórico de requisições."""
+        self.history.clear_history()
+        self.history_tab.clear_display()
+        log.info("Histórico de requisições limpo.")
+        QMessageBox.information(self, "Sucesso", "Histórico limpo com sucesso!")
