@@ -20,18 +20,24 @@ from src.core.websocket_history import WebSocketHistory
 from src.core.active_scanner import ActiveScanner
 from src.core.browser_manager import BrowserManager
 from src.core.logger_config import log
+from src.ui.widgets.proxy_control_widget import ProxyControlWidget
+from src.ui.tabs.rules_tab import RulesTab, RulesTableModel
 
 class ProxyGUI(QMainWindow):
     """Interface gráfica em PySide6 para o proxy interceptador."""
 
     proxy_stopped_signal = Signal()
     ui_update_signal = Signal(dict)
+    browser_install_start_signal = Signal()
+    browser_install_finish_signal = Signal()
 
     def __init__(self):
         super().__init__()
 
         self.proxy_stopped_signal.connect(self._set_proxy_stopped_state)
         self.ui_update_signal.connect(self._handle_ui_update)
+        self.browser_install_start_signal.connect(self._on_browser_install_start)
+        self.browser_install_finish_signal.connect(self._on_browser_install_finish)
 
         # Inicializa a lógica de negócio (backend)
         self.config = InterceptConfig()
@@ -40,7 +46,11 @@ class ProxyGUI(QMainWindow):
         self.spider = Spider()
         self.websocket_history = WebSocketHistory()
         self.active_scanner = ActiveScanner()
-        self.browser_manager = BrowserManager(proxy_port=self.config.get_port())
+        self.browser_manager = BrowserManager(
+            proxy_port=self.config.get_port(),
+            on_install_start=self.browser_install_start_signal.emit,
+            on_install_finish=self.browser_install_finish_signal.emit
+        )
 
         # Estado da aplicação
         self.proxy_thread = None
@@ -59,7 +69,6 @@ class ProxyGUI(QMainWindow):
 
         self.setup_ui()
         self.update_ui_state()
-        self._refresh_rules_list()
 
         # Inicia o timer para processar a fila de eventos da UI
         self.ui_queue_timer = QTimer()
@@ -68,8 +77,16 @@ class ProxyGUI(QMainWindow):
 
     def setup_ui(self):
         """Configura os elementos da UI."""
-        # 1. Grupo de Controle do Proxy
-        self._setup_proxy_controls()
+        # 1. Cria e adiciona o widget de controle do proxy
+        self.control_widget = ProxyControlWidget(str(self.config.get_port()))
+        self.main_layout.addWidget(self.control_widget)
+
+        # Conecta os sinais do widget aos slots da janela principal
+        self.control_widget.start_proxy_requested.connect(self.start_proxy)
+        self.control_widget.stop_proxy_requested.connect(self.stop_proxy)
+        self.control_widget.toggle_pause_requested.connect(self.toggle_pause_proxy)
+        self.control_widget.save_port_requested.connect(self.save_port)
+        self.control_widget.launch_browser_requested.connect(self.launch_browser)
 
         # 2. Notebook com as abas
         self._setup_tabs()
@@ -79,121 +96,9 @@ class ProxyGUI(QMainWindow):
         self.tab_widget = QTabWidget()
         self.main_layout.addWidget(self.tab_widget)
 
-        # Aba de Regras
-        self._setup_rules_tab()
-
-    def _setup_rules_tab(self):
-        """Cria a aba de Regras de Interceptação."""
-        rules_tab = QWidget()
-        rules_layout = QVBoxLayout(rules_tab)
-
-        # --- Formulário de Adicionar Regra ---
-        add_rule_group = QGroupBox("Adicionar Regra de Interceptação")
-        add_rule_layout = QGridLayout()
-
-        # Linha 1
-        add_rule_layout.addWidget(QLabel("Host/Domínio:"), 0, 0)
-        self.host_entry = QLineEdit("exemplo.com")
-        add_rule_layout.addWidget(self.host_entry, 0, 1)
-
-        add_rule_layout.addWidget(QLabel("Caminho:"), 0, 2)
-        self.path_entry = QLineEdit("/contato")
-        add_rule_layout.addWidget(self.path_entry, 0, 3)
-
-        # Linha 2
-        add_rule_layout.addWidget(QLabel("Nome do Parâmetro:"), 1, 0)
-        self.param_name_entry = QLineEdit("Titulo")
-        add_rule_layout.addWidget(self.param_name_entry, 1, 1)
-
-        add_rule_layout.addWidget(QLabel("Novo Valor:"), 1, 2)
-        self.param_value_entry = QLineEdit("teste1")
-        add_rule_layout.addWidget(self.param_value_entry, 1, 3)
-
-        # Botão Adicionar
-        add_button = QPushButton("Adicionar Regra")
-        add_button.clicked.connect(self.add_rule)
-        add_rule_layout.addWidget(add_button, 2, 0, 1, 4) # Ocupa 4 colunas
-
-        add_rule_group.setLayout(add_rule_layout)
-        rules_layout.addWidget(add_rule_group)
-
-        # --- Lista de Regras ---
-        rules_list_group = QGroupBox("Regras Configuradas")
-        rules_list_layout = QVBoxLayout()
-
-        self.rules_table = QTableView()
-        self.rules_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.rules_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.rules_model = RulesTableModel(self.config.get_rules())
-        self.rules_table.setModel(self.rules_model)
-        self.rules_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-
-        rules_list_layout.addWidget(self.rules_table)
-        rules_list_group.setLayout(rules_list_layout)
-        rules_layout.addWidget(rules_list_group)
-
-        # --- Botões de Ação ---
-        action_buttons_layout = QHBoxLayout()
-        remove_button = QPushButton("Remover Regra Selecionada")
-        remove_button.clicked.connect(self.remove_rule)
-        action_buttons_layout.addWidget(remove_button)
-
-        toggle_button = QPushButton("Ativar/Desativar Regra")
-        toggle_button.clicked.connect(self.toggle_rule)
-        action_buttons_layout.addWidget(toggle_button)
-
-        duplicate_button = QPushButton("Duplicar Regra")
-        duplicate_button.clicked.connect(self.duplicate_rule)
-        action_buttons_layout.addWidget(duplicate_button)
-
-        action_buttons_layout.addStretch()
-        rules_layout.addLayout(action_buttons_layout)
-
+        # Cria e adiciona a aba de regras
+        rules_tab = RulesTab(self.config)
         self.tab_widget.addTab(rules_tab, "Regras de Interceptação")
-
-    def _setup_proxy_controls(self):
-        """Cria o painel de controle do proxy."""
-        control_group = QGroupBox("Controle do Proxy")
-        control_layout = QHBoxLayout()
-
-        # Status
-        self.status_label = QLabel("Status: Parado")
-        self.status_label.setStyleSheet("color: red; font-weight: bold;")
-        control_layout.addWidget(self.status_label)
-
-        # Botões
-        self.start_button = QPushButton("Iniciar Proxy")
-        self.start_button.clicked.connect(self.start_proxy)
-        control_layout.addWidget(self.start_button)
-
-        self.stop_button = QPushButton("Parar Proxy")
-        self.stop_button.clicked.connect(self.stop_proxy)
-        control_layout.addWidget(self.stop_button)
-
-        self.pause_button = QPushButton("Pausar")
-        self.pause_button.clicked.connect(self.toggle_pause_proxy)
-        control_layout.addWidget(self.pause_button)
-
-        # Porta
-        control_layout.addSpacing(20)
-        control_layout.addWidget(QLabel("Porta:"))
-        self.port_entry = QLineEdit(str(self.config.get_port()))
-        self.port_entry.setFixedWidth(60)
-        control_layout.addWidget(self.port_entry)
-
-        self.port_save_button = QPushButton("Salvar Porta")
-        self.port_save_button.clicked.connect(self.save_port)
-        control_layout.addWidget(self.port_save_button)
-
-        # Navegador
-        control_layout.addSpacing(20)
-        self.browser_button = QPushButton("Abrir Navegador")
-        self.browser_button.clicked.connect(self.launch_browser)
-        control_layout.addWidget(self.browser_button)
-
-        control_layout.addStretch() # Empurra tudo para a esquerda
-        control_group.setLayout(control_layout)
-        self.main_layout.addWidget(control_group)
 
     def start_proxy(self):
         """Inicia o servidor proxy em uma thread separada."""
@@ -262,45 +167,29 @@ class ProxyGUI(QMainWindow):
         log.info(f"Proxy pausado: {is_paused}")
         self.update_ui_state()
 
-    def save_port(self):
+    def save_port(self, port_str: str):
         """Salva a porta configurada."""
-        port_str = self.port_entry.text().strip()
         success, message = self.config.set_port(port_str)
         if success:
             QMessageBox.information(self, "Sucesso", message)
         else:
             QMessageBox.warning(self, "Erro", message)
-            self.port_entry.setText(str(self.config.get_port()))
+            self.control_widget.set_port_text(str(self.config.get_port()))
 
     def launch_browser(self):
         """Abre o navegador pré-configurado."""
-        log.info("PySide6 GUI: Abrindo o navegador...")
-        QMessageBox.information(self, "Navegador", "Funcionalidade de abrir navegador a ser implementada.")
+        if not self.proxy_running:
+            QMessageBox.warning(self, "Aviso", "O proxy precisa estar em execução para abrir o navegador.")
+            return
+
+        log.info("PySide6 GUI: Solicitando abertura do navegador...")
+        self.browser_manager.launch_browser()
 
     def update_ui_state(self):
         """Atualiza o estado dos widgets da UI."""
-        # Estado dos botões de controle
-        self.start_button.setEnabled(not self.proxy_running)
-        self.stop_button.setEnabled(self.proxy_running)
-        self.pause_button.setEnabled(self.proxy_running)
-        self.browser_button.setEnabled(self.proxy_running)
-        self.port_entry.setEnabled(not self.proxy_running)
-        self.port_save_button.setEnabled(not self.proxy_running)
-
-        # Status e texto do botão de pausa
+        self.control_widget.set_proxy_running(self.proxy_running)
         if self.proxy_running:
-            if self.config.is_paused():
-                self.status_label.setText("Status: Pausado")
-                self.status_label.setStyleSheet("color: orange; font-weight: bold;")
-                self.pause_button.setText("Continuar")
-            else:
-                self.status_label.setText("Status: Executando")
-                self.status_label.setStyleSheet("color: green; font-weight: bold;")
-                self.pause_button.setText("Pausar")
-        else:
-            self.status_label.setText("Status: Parado")
-            self.status_label.setStyleSheet("color: red; font-weight: bold;")
-            self.pause_button.setText("Pausar")
+            self.control_widget.set_proxy_paused(self.config.is_paused())
 
     def closeEvent(self, event):
         """Handler para o fechamento da janela."""
@@ -309,6 +198,16 @@ class ProxyGUI(QMainWindow):
         if self.proxy_running:
             self.stop_proxy()
         event.accept()
+
+    # --- Slots para Sinais do Navegador ---
+    def _on_browser_install_start(self):
+        """Atualiza a UI quando a instalação do navegador começa."""
+        self.control_widget.set_browser_installing()
+
+    def _on_browser_install_finish(self):
+        """Atualiza a UI quando a instalação do navegador termina."""
+        self.control_widget.set_browser_installed()
+        QMessageBox.information(self, "Sucesso", "Navegador instalado! Você já pode abri-lo.")
 
     # --- Processamento de Eventos da UI ---
     def _process_ui_queue(self):
@@ -339,110 +238,4 @@ class ProxyGUI(QMainWindow):
             # Lógica para atualizar lista de websockets
             pass
 
-    # --- Lógica da Aba de Regras ---
-    def add_rule(self):
-        """Adiciona uma nova regra e atualiza a UI."""
-        host = self.host_entry.text()
-        path = self.path_entry.text()
-        param_name = self.param_name_entry.text()
-        param_value = self.param_value_entry.text()
-
-        success, message = self.config.add_rule(host, path, param_name, param_value)
-        if success:
-            QMessageBox.information(self, "Sucesso", message)
-            self._refresh_rules_list()
-        else:
-            QMessageBox.warning(self, "Erro de Validação", message)
-
-    def remove_rule(self):
-        """Remove a regra selecionada."""
-        selected_indexes = self.rules_table.selectionModel().selectedRows()
-        if not selected_indexes:
-            QMessageBox.warning(self, "Aviso", "Selecione uma regra para remover.")
-            return
-
-        row_index = selected_indexes[0].row()
-        if self.config.remove_rule(row_index):
-            QMessageBox.information(self, "Sucesso", "Regra removida.")
-            self._refresh_rules_list()
-        else:
-            QMessageBox.critical(self, "Erro", "Não foi possível remover a regra.")
-
-    def toggle_rule(self):
-        """Ativa ou desativa a regra selecionada."""
-        selected_indexes = self.rules_table.selectionModel().selectedRows()
-        if not selected_indexes:
-            QMessageBox.warning(self, "Aviso", "Selecione uma regra para ativar/desativar.")
-            return
-
-        row_index = selected_indexes[0].row()
-        if self.config.toggle_rule(row_index):
-            self._refresh_rules_list()
-
-    def duplicate_rule(self):
-        """Duplica a regra selecionada."""
-        selected_indexes = self.rules_table.selectionModel().selectedRows()
-        if not selected_indexes:
-            QMessageBox.warning(self, "Aviso", "Selecione uma regra para duplicar.")
-            return
-
-        row_index = selected_indexes[0].row()
-        rule_to_duplicate = self.config.get_rules()[row_index]
-
-        # Usa a lógica de adicionar para manter a validação
-        success, _ = self.config.add_rule(
-            rule_to_duplicate['host'],
-            rule_to_duplicate['path'],
-            rule_to_duplicate['param_name'],
-            rule_to_duplicate['param_value']
-        )
-        if success:
-            QMessageBox.information(self, "Sucesso", "Regra duplicada.")
-            self._refresh_rules_list()
-        else:
-            QMessageBox.critical(self, "Erro", "Não foi possível duplicar a regra.")
-
-    def _refresh_rules_list(self):
-        """Atualiza a tabela de regras com os dados mais recentes."""
-        self.rules_model.update_data(self.config.get_rules())
-
-# --- Model para a Tabela de Regras ---
-class RulesTableModel(QAbstractTableModel):
-    """Modelo de dados para a QTableView que exibe as regras."""
-    def __init__(self, data=None):
-        super().__init__()
-        self._data = data or []
-        self._headers = ['Host', 'Caminho', 'Parâmetro', 'Valor', 'Status']
-
-    def data(self, index, role):
-        if role == Qt.ItemDataRole.DisplayRole:
-            rule = self._data[index.row()]
-            col = index.column()
-            if col == 0:
-                return rule.get('host', '')
-            elif col == 1:
-                return rule.get('path', '')
-            elif col == 2:
-                return rule.get('param_name', '')
-            elif col == 3:
-                return rule.get('param_value', '')
-            elif col == 4:
-                return "Ativo" if rule.get('enabled', True) else "Inativo"
-        return None
-
-    def rowCount(self, index):
-        return len(self._data)
-
-    def columnCount(self, index):
-        return len(self._headers)
-
-    def headerData(self, section, orientation, role):
-        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
-            return self._headers[section]
-        return None
-
-    def update_data(self, new_data):
-        """Atualiza os dados do modelo e notifica a view."""
-        self.beginResetModel()
-        self._data = new_data
-        self.endResetModel()
+    pass
